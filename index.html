@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Diag-Assist — Matriz • Relaciones • Preponderancia</title>
+<style>
+  :root{
+    --bg:#ffffff; --panel:#f7f7fb; --text:#1a2230; --muted:#687387; --accent:#2563eb;
+    --border:#d8dbe6; --chip:#eef1f7; --ok:#16a34a; --warn:#f59e0b; --err:#ef4444;
+    --grid-dot:#e6e9f2;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{margin:0;background:var(--bg);color:var(--text);font:15px/1.5 system-ui,Segoe UI,Roboto,Inter,Arial}
+  header{position:sticky;top:0;z-index:5;background:linear-gradient(#fff,rgba(255,255,255,.85));border-bottom:1px solid var(--border)}
+  .wrap{max-width:1180px;margin:0 auto;padding:10px 14px}
+  h1{margin:0 0 2px;font-size:18px} .sub{color:var(--muted);font-size:12px}
+  .tabs{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
+  .tabbtn{padding:8px 12px;border:1px solid var(--border);border-radius:10px;background:#fff;cursor:pointer}
+  .tabbtn.active{background:var(--accent);border-color:var(--accent);color:#fff}
+  .cols{display:grid;grid-template-columns: 360px 1fr; gap:14px}
+  .card{background:#fff;border:1px solid var(--border);border-radius:14px;padding:12px}
+  .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  input,button,select,textarea{border:1px solid var(--border);border-radius:10px;padding:8px 10px;background:#fff;color:var(--text)}
+  button{cursor:pointer}
+  .muted{color:var(--muted)} .ok{color:var(--ok)} .warn{color:var(--warn)} .err{color:var(--err)}
+  table{width:100%;border-collapse:collapse;font-size:14px}
+  th,td{border-bottom:1px solid var(--border);padding:8px;text-align:center}
+  th.sticky{position:sticky;top:0;background:#fff;z-index:1}
+  td.lock{background:#f3f4f8;color:#9aa3b2}
+  .hint{font-size:12px;color:var(--muted)}
+  /* Whiteboard con retícula de puntos */
+  #boardWrap{position:relative;height:640px;border:1px solid var(--border);border-radius:14px;overflow:hidden;background:
+    radial-gradient(var(--grid-dot) 1px, transparent 1px) 0 0/10px 10px #fff;}
+  #boardSVG{position:absolute;inset:0}
+  /* nodos (burbujas) */
+  .node text{font-size:12px;pointer-events:none}
+  .node circle{fill:#f0f9ff;stroke:#2563eb;stroke-width:1.5}
+  .node[data-zone="privada"] circle{fill:#eef6ff;stroke:#a855f7}
+  .node[data-zone="servicio"] circle{fill:#fff7ed;stroke:#f59e0b}
+  .legend{display:flex;gap:10px;align-items:center;font-size:12px;margin-top:6px}
+  .legend .chip{display:inline-flex;gap:6px;align-items:center;border:1px solid var(--border);background:var(--chip);border-radius:999px;padding:4px 8px}
+  .dash{stroke-dasharray:6 6}
+  .toolbar{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <h1>Diag‑Assist</h1>
+    <div class="sub">Matriz 8/4/0 → Preponderancia (anillos) → Relaciones. Basado en tu guía de diagramación (círculos iguales, sin flechas en relaciones). </div>
+    <div class="tabs">
+      <button class="tabbtn active" data-tab="matriz">Matriz de Relaciones</button>
+      <button class="tabbtn" data-tab="rel">Relaciones</button>
+      <button class="tabbtn" data-tab="circ">Circulaciones</button>
+      <button class="tabbtn" data-tab="burb">Diagrama de Burbujas</button>
+      <button class="tabbtn" data-tab="bloq">Diagrama de Bloques</button>
+      <button class="tabbtn" data-tab="ent">Entorno</button>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+  <div class="cols">
+    <!-- Panel izquierdo: controles -->
+    <section class="card" id="leftPanel">
+      <!-- ====== MATRIZ ====== -->
+      <div class="tab tab-matriz">
+        <h3>Matriz de relaciones (8 / 4 / 0)</h3>
+        <div class="row">
+          <input id="ambientesInput" placeholder="Ambientes separados por coma: Sala, Comedor, Cocina, Dorm 1, Dorm 2, S.S., Patio de servicio" style="width:100%"/>
+        </div>
+        <div class="toolbar">
+          <button id="btnInsertTable">Insertar tabla</button>
+          <button id="btnApplyPresets">Aplicar predeterminadas</button>
+          <button id="btnClearMatrix">Limpiar matriz</button>
+        </div>
+        <div class="hint">Clic en una celda para ciclar 0 → 4 → 8 (la diagonal está bloqueada y se copia simétrico). Las sumas de filas/columnas deben coincidir.</div>
+        <div class="space"></div>
+        <div id="matrixHost"></div>
+        <div class="space"></div>
+        <div class="toolbar">
+          <button id="btnPreponderancia">Generar preponderancia (anillos)</button>
+          <button id="btnCopiarARelaciones" title="Pasa las mismas burbujas al tab Relaciones">Copiar a “Relaciones”</button>
+        </div>
+        <div class="legend">
+          <span class="chip"><svg width="14" height="14"><circle cx="7" cy="7" r="6" fill="#eef6ff" stroke="#a855f7"/></svg> Zona privada</span>
+          <span class="chip"><svg width="14" height="14"><circle cx="7" cy="7" r="6" fill="#fff7ed" stroke="#f59e0b"/></svg> Servicio</span>
+          <span class="chip"><svg width="14" height="14"><circle cx="7" cy="7" r="6" fill="#f0f9ff" stroke="#2563eb"/></svg> Social/otra</span>
+        </div>
+      </div>
+
+      <!-- ====== RELACIONES ====== -->
+      <div class="tab tab-rel" style="display:none">
+        <h3>Relaciones (línea continua = 8; punteada = 4)</h3>
+        <div class="toolbar">
+          <button id="btnGenRelaciones">Generar relaciones desde matriz</button>
+          <button id="btnClearRel">Limpiar líneas</button>
+        </div>
+        <div class="hint">Aquí no hay flechas ni vestíbulos (eso es del diagrama de circulaciones).</div>
+      </div>
+
+      <!-- Stubs para las siguientes pestañas -->
+      <div class="tab tab-circ" style="display:none">
+        <h3>Circulaciones (próximo paso)</h3>
+        <div class="hint">Se usarán flechas y vestíbulos; podrás anotar % en cada flecha, como indica tu guía.</div>
+      </div>
+      <div class="tab tab-burb" style="display:none">
+        <h3>Diagrama de Burbujas (próximo paso)</h3>
+        <div class="hint">Óvalos proporcionales a m² y símbolo “V” para ventanas; los iremos activando en el siguiente sprint.</div>
+      </div>
+      <div class="tab tab-bloq" style="display:none">
+        <h3>Diagrama de Bloques (próximo paso)</h3>
+        <div class="hint">Rectángulos/círculos con medidas, a escala aproximada a partir de las burbujas.</div>
+      </div>
+      <div class="tab tab-ent" style="display:none">
+        <h3>Entorno (próximo paso)</h3>
+        <div class="hint">Norte, vistas, vientos, sol, pendiente… capa ambiental para orientar decisiones.</div>
+      </div>
+
+      <div class="space"></div>
+      <h4>Predeterminadas (reglas rápidas)</h4>
+      <div class="hint">Se aplican al apachar “Aplicar predeterminadas”. Puedes editarlas en el código.</div>
+      <ul style="margin:6px 0 0 16px;padding:0;line-height:1.6">
+        <li>Cocina ↔ Comedor = <b>8</b> (necesaria)</li>
+        <li>Sala ↔ Comedor = <b>4</b> (deseable)</li>
+        <li>Dormitorios ↔ S.S. = <b>4</b> (deseable/cercano)</li>
+        <li>Patio de servicio ↔ Cocina/Lav. = <b>8</b> (necesaria)</li>
+      </ul>
+    </section>
+
+    <!-- Panel derecho: pizarra con retícula -->
+    <section class="card">
+      <div id="boardWrap">
+        <svg id="boardSVG"></svg>
+      </div>
+    </section>
+  </div>
+</main>
+
+<script>
+/* ==========================
+   ESTADO BASE
+========================== */
+const S = {
+  zonas: {},                // nombre -> 'social' | 'privada' | 'servicio'
+  ambientes: [],            // lista ordenada
+  matrix: {},               // "A|B" => 0|4|8  (simétrica)
+  sums: {},                 // nombre -> sumatoria
+  nodes: [],                // [{name,x,y,ring,zone}]
+  rings: [],                // [{r,sum}]
+  view: 'matriz'
+};
+// Reglas predeterminadas (puedes editar estas tuplas)
+const PRESETS = [
+  ['Cocina','Comedor',8],
+  ['Patio de servicio','Cocina',8],
+  ['Sala','Comedor',4],
+  ['Dorm 1','S.S.',4], ['Dorm 2','S.S.',4]
+];
+
+/* ==========================
+   UTILIDADES
+========================== */
+const $ = s => document.querySelector(s);
+const el = (t,attrs={}) => Object.assign(document.createElement(t), attrs);
+const keyAB = (a,b) => a < b ? `${a}|${b}` : `${b}|${a}`;
+function setRel(a,b,val){ if(a===b) return; S.matrix[keyAB(a,b)] = val; }
+function getRel(a,b){ if(a===b) return 0; return S.matrix[keyAB(a,b)] ?? 0; }
+
+/* ==========================
+   TABS
+========================== */
+document.querySelectorAll('.tabbtn').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('.tabbtn').forEach(x=>x.classList.remove('active'));
+    btn.classList.add('active');
+    const tab = btn.dataset.tab;
+    S.view = tab;
+    document.querySelectorAll('.tab').forEach(x=>x.style.display='none');
+    $(`.tab-${tab}`).style.display = '';
+    drawBoard(); // redibuja lo que va en pizarra
+  });
+});
+
+/* ==========================
+   MATRIZ: CREAR Y RELLENAR
+========================== */
+$('#btnInsertTable').addEventListener('click', ()=>{
+  const txt = $('#ambientesInput').value.trim();
+  if(!txt) return alert('Escribe los ambientes separados por coma');
+  S.ambientes = txt.split(',').map(s=>s.trim()).filter(Boolean);
+  // zona autodetect simple por nombre (puedes marcar manual luego)
+  S.zonas = {};
+  S.ambientes.forEach(n=>{
+    const t = n.toLowerCase();
+    S.zonas[n] = t.includes('dorm') ? 'privada'
+               : (t.includes('patio')||t.includes('cocina')||t.includes('lav')) ? 'servicio'
+               : 'social';
+  });
+  // inicializar matriz a 0
+  S.matrix = {};
+  for(let i=0;i<S.ambientes.length;i++){
+    for(let j=i+1;j<S.ambientes.length;j++){
+      setRel(S.ambientes[i], S.ambientes[j], 0);
+    }
+  }
+  renderMatrix();
+  drawBoard();
+});
+
+$('#btnClearMatrix').addEventListener('click', ()=>{
+  Object.keys(S.matrix).forEach(k=> S.matrix[k]=0);
+  renderMatrix();
+  drawBoard();
+});
+
+$('#btnApplyPresets').addEventListener('click', ()=>{
+  PRESETS.forEach(([a,b,val])=>{
+    if(S.ambientes.includes(a) && S.ambientes.includes(b)) setRel(a,b,val);
+  });
+  renderMatrix();
+});
+
+/* Renderizar la tabla NxN con sumatorias y celdas 0/4/8 */
+function renderMatrix(){
+  const host = $('#matrixHost');
+  host.innerHTML = '';
+  if(S.ambientes.length===0){ host.innerHTML = '<div class="hint">Primero inserta la lista de ambientes.</div>'; return; }
+  const tbl = el('table');
+  const thead = el('thead');
+  const hr = el('tr'); hr.append(el('th',{textContent:'—',className:'sticky'}));
+  S.ambientes.forEach(n=> hr.append(el('th',{textContent:n,className:'sticky'})));
+  hr.append(el('th',{textContent:'Σ fila',className:'sticky'}));
+  thead.append(hr); tbl.append(thead);
+  const tbody = el('tbody');
+
+  // filas
+  S.sums = {};
+  S.ambientes.forEach((a,i)=>{
+    const tr = el('tr');
+    tr.append(el('th',{textContent:a,style:'position:sticky;left:0;background:#fff;z-index:1'}));
+    let sum = 0;
+    S.ambientes.forEach((b,j)=>{
+      const td = el('td');
+      if(i===j){ td.textContent='—'; td.className='lock'; tr.append(td); return; }
+      let v = getRel(a,b);
+      sum += v;
+      td.textContent = String(v);
+      td.style.cursor = 'pointer';
+      td.addEventListener('click', ()=>{
+        // ciclo 0 -> 4 -> 8 -> 0
+        const cur = getRel(a,b);
+        const nxt = cur===0 ? 4 : (cur===4 ? 8 : 0);
+        setRel(a,b,nxt);
+        renderMatrix();
+      });
+      tr.append(td);
+    });
+    S.sums[a] = sum;
+    const tdSum = el('td',{textContent:sum});
+    tr.append(tdSum);
+    tbody.append(tr);
+  });
+
+  // última fila con sumas por columna
+  const trS = el('tr');
+  trS.append(el('th',{textContent:'Σ col'}));
+  let ok = true;
+  S.ambientes.forEach((b,j)=>{
+    let s=0;
+    S.ambientes.forEach((a,i)=>{ if(i!==j) s += getRel(a,b); });
+    if(s!==S.sums[b]) ok=false;
+    trS.append(el('td',{textContent:s}));
+  });
+  trS.append(el('td',{innerHTML: ok ? '<span class="ok">✓ OK</span>' : '<span class="err">⚠ Revisar</span>'}));
+  tbody.append(trS);
+
+  tbl.append(tbody);
+  host.append(tbl);
+}
+
+/* ==========================
+   PREPONDERANCIA (ANILLOS)
+   — Agrupa por suma; anillos concéntricos y burbujas en el borde
+========================== */
+$('#btnPreponderancia').addEventListener('click', ()=>{
+  if(S.ambientes.length===0) return alert('Primero crea la matriz.');
+  // 1) calcular sumas por ambiente
+  S.sums = {};
+  S.ambientes.forEach(a=>{
+    let s=0; S.ambientes.forEach(b=>{ if(a!==b) s += getRel(a,b); });
+    S.sums[a]=s;
+  });
+  // 2) agrupar por suma, orden desc (Rango 1 = mayor)
+  const sumsUniq = [...new Set(Object.values(S.sums))].sort((a,b)=>b-a);
+  S.rings = sumsUniq.map((sum,idx)=>({ sum, r: 80 + idx*60 }));
+  // 3) distribuir burbujas sobre cada anillo
+  S.nodes = [];
+  S.ambientes.forEach(name=>{
+    const sum = S.sums[name];
+    const ring = S.rings.find(r=>r.sum===sum);
+    const same = S.ambientes.filter(n=>S.sums[n]===sum);
+    const idx = same.indexOf(name);
+    const angle = (idx / same.length) * Math.PI*2; // radianes
+    const cx = 420, cy = 320; // centro fijo
+    const x = cx + ring.r * Math.cos(angle);
+    const y = cy + ring.r * Math.sin(angle);
+    S.nodes.push({name, x, y, ring: ring.r, zone: S.zonas[name]||'social'});
+  });
+  S.view = 'matriz'; drawBoard();
+});
+
+/* Copiar nodos a la pestaña Relaciones */
+$('#btnCopiarARelaciones').addEventListener('click', ()=>{
+  // solo cambiamos de pestaña; reutilizamos los mismos nodos
+  document.querySelectorAll('.tabbtn').forEach(x=>x.classList.remove('active'));
+  document.querySelector('.tabbtn[data-tab="rel"]').classList.add('active');
+  document.querySelectorAll('.tab').forEach(x=>x.style.display='none');
+  $('.tab-rel').style.display='';
+  S.view='rel';
+  drawBoard();
+});
+
+/* ==========================
+   RELACIONES: DIBUJAR LÍNEAS
+========================== */
+$('#btnGenRelaciones').addEventListener('click', ()=>{
+  if(!S.nodes.length) return alert('Primero genera la preponderancia (anillos).');
+  S.view='rel'; drawBoard(true);
+});
+$('#btnClearRel').addEventListener('click', ()=>{ S.view='rel'; drawBoard(false); });
+
+/* ==========================
+   PIZARRA (SVG): anillos, nodos, líneas
+========================== */
+function drawBoard(drawEdges=false){
+  const svg = $('#boardSVG');
+  svg.innerHTML = '';
+  const W = svg.clientWidth || svg.parentElement.clientWidth;
+  const H = svg.clientHeight || svg.parentElement.clientHeight;
+  svg.setAttribute('width', W); svg.setAttribute('height', H);
+
+  const cx = W/2, cy = H/2;
+
+  // Dibuja anillos SOLO en vista matriz/rel si hay
+  if(['matriz','rel'].includes(S.view) && S.rings.length){
+    S.rings.forEach((r,i)=>{
+      const c = document.createElementNS('http://www.w3.org/2000/svg','circle');
+      c.setAttribute('cx', cx); c.setAttribute('cy', cy); c.setAttribute('r', r.r);
+      c.setAttribute('fill', 'none'); c.setAttribute('stroke', '#bcd0ff'); c.setAttribute('stroke-width','1.2');
+      svg.appendChild(c);
+      // etiqueta de rango (suma)
+      const t = document.createElementNS('http://www.w3.org/2000/svg','text');
+      t.setAttribute('x', cx + r.r + 6); t.setAttribute('y', cy - 6);
+      t.setAttribute('fill', '#5f6b86'); t.textContent = `Σ = ${r.sum}`;
+      svg.appendChild(t);
+    });
+  }
+
+  // Nodos (burbujas) si existen
+  if(S.nodes.length){
+    // grupo líneas detrás
+    const gEdges = document.createElementNS('http://www.w3.org/2000/svg','g'); svg.appendChild(gEdges);
+    const gNodes = document.createElementNS('http://www.w3.org/2000/svg','g'); svg.appendChild(gNodes);
+
+    // Relación: dibujar líneas
+    if(S.view==='rel' && drawEdges){
+      for(let i=0;i<S.nodes.length;i++){
+        for(let j=i+1;j<S.nodes.length;j++){
+          const a = S.nodes[i], b = S.nodes[j];
+          const val = getRel(a.name, b.name);
+          if(!val) continue;
+          const line = document.createElementNS('http://www.w3.org/2000/svg','line');
+          line.setAttribute('x1', a.x); line.setAttribute('y1', a.y);
+          line.setAttribute('x2', b.x); line.setAttribute('y2', b.y);
+          line.setAttribute('stroke', '#1f2937');
+          line.setAttribute('stroke-width', '1.8');
+          if(val===4) line.setAttribute('stroke-dasharray','6 6'); // deseable
+          gEdges.appendChild(line);
+        }
+      }
+    }
+
+    // Dibujar nodos
+    S.nodes.forEach(n=>{
+      const g = document.createElementNS('http://www.w3.org/2000/svg','g');
+      g.classList.add('node'); g.dataset.zone = n.zone || 'social';
+      g.setAttribute('transform', `translate(${n.x},${n.y})`);
+      // circulito de 16px
+      const c = document.createElementNS('http://www.w3.org/2000/svg','circle');
+      c.setAttribute('r','16');
+      const t = document.createElementNS('http://www.w3.org/2000/svg','text');
+      t.setAttribute('text-anchor','middle'); t.setAttribute('dy','.35em');
+      t.textContent = n.name;
+      g.appendChild(c); g.appendChild(t); gNodes.appendChild(g);
+    });
+  }
+}
+
+/* ========== INIT ========= */
+drawBoard();
+</script>
+</body>
+</html>
