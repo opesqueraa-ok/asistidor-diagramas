@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Diag-Assist v1.1.2 — Matriz • Relaciones • Preponderancia</title>
+<meta name="x-version" content="1.1.2"/>
+<style>
+  :root{
+    --bg:#ffffff; --panel:#f7f7fb; --text:#1a2230; --muted:#687387; --accent:#2563eb;
+    --border:#d8dbe6; --chip:#eef1f7; --ok:#16a34a; --warn:#f59e0b; --err:#ef4444;
+    --grid-dot:#e6e9f2;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{margin:0;background:var(--bg);color:var(--text);font:15px/1.5 system-ui,Segoe UI,Roboto,Inter,Arial}
+  header{position:sticky;top:0;z-index:5;background:linear-gradient(#fff,rgba(255,255,255,.85));border-bottom:1px solid var(--border)}
+  .wrap{max-width:1180px;margin:0 auto;padding:10px 14px}
+  h1{margin:0 0 2px;font-size:18px} .sub{color:var(--muted);font-size:12px}
+  .tabs{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
+  .tabbtn{padding:8px 12px;border:1px solid var(--border);border-radius:10px;background:#fff;cursor:pointer}
+  .tabbtn.active{background:var(--accent);border-color:var(--accent);color:#fff}
+  .cols{display:grid;grid-template-columns: 360px 1fr; gap:14px}
+  .card{background:#fff;border:1px solid var(--border);border-radius:14px;padding:12px}
+  .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  input,button,select,textarea{border:1px solid var(--border);border-radius:10px;padding:8px 10px;background:#fff;color:#000}
+  button{cursor:pointer}
+  .muted{color:var(--muted)} .ok{color:var(--ok)} .warn{color:var(--warn)} .err{color:var(--err)}
+  table{width:100%;border-collapse:collapse;font-size:14px}
+  th,td{border-bottom:1px solid var(--border);padding:8px;text-align:center}
+  th.sticky{position:sticky;top:0;background:#fff;z-index:1}
+  td.lock{background:#f3f4f8;color:#9aa3b2}
+  .hint{font-size:12px;color:var(--muted)}
+  /* Whiteboard con retícula de puntos */
+  #boardWrap{position:relative;height:640px;border:1px solid var(--border);border-radius:14px;overflow:hidden;background:
+    radial-gradient(var(--grid-dot) 1px, transparent 1px) 0 0/10px 10px #fff;}
+  #boardSVG{position:absolute;inset:0}
+  /* nodos (burbujas) */
+  .node text{font-size:12px;pointer-events:none; fill:#000}
+  .node circle{fill:#f0f9ff;stroke:#2563eb;stroke-width:1.5}
+  .node[data-zone="privada"] circle{fill:#eef6ff;stroke:#a855f7}
+  .node[data-zone="servicio"] circle{fill:#fff7ed;stroke:#f59e0b}
+  .legend{display:flex;gap:10px;align-items:center;font-size:12px;margin-top:6px}
+  .legend .chip{display:inline-flex;gap:6px;align-items:center;border:1px solid var(--border);background:var(--chip);border-radius:999px;padding:4px 8px}
+  .dash{stroke-dasharray:6 6}
+  .toolbar{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}
+  .hiddenRings { opacity:.15; transition:opacity .2s ease; }
+  .node.dragging circle{ stroke:#111; stroke-width:2.2 }
+  .badge{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--border);background:#fff;border-radius:999px;padding:4px 10px;font-size:12px;color:#000}
+  #errBox{position:fixed;left:12px;bottom:12px;background:#fee2e2;color:#991b1b;border:1px solid #fecaca;padding:8px 12px;border-radius:10px;font-size:12px;display:none;z-index:99}
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <div class="row" style="justify-content:space-between;align-items:flex-start">
+      <div>
+        <h1>Diag‑Assist <span class="badge" id="versionBadge">v1.1.2</span></h1>
+        <div class="sub">Matriz 8/4/0 → Preponderancia (anillos) → Relaciones. Basado en la guía de diagramación.</div>
+      </div>
+      <div class="row">
+        <button id="forceReload" title="Recargar forzando caché">Recargar v1.1.2</button>
+      </div>
+    </div>
+    <div class="tabs">
+      <button class="tabbtn active" data-tab="matriz">Matriz de Relaciones</button>
+      <button class="tabbtn" data-tab="rel">Relaciones</button>
+      <button class="tabbtn" data-tab="circ">Circulaciones</button>
+      <button class="tabbtn" data-tab="burb">Diagrama de Burbujas</button>
+      <button class="tabbtn" data-tab="bloq">Diagrama de Bloques</button>
+      <button class="tabbtn" data-tab="ent">Entorno</button>
+    </div>
+  </div>
+</header>
+
+<div id="errBox"></div>
+
+<main class="wrap">
+  <div class="cols">
+    <!-- Panel izquierdo: controles -->
+    <section class="card" id="leftPanel">
+      <!-- ====== MATRIZ ====== -->
+      <div class="tab tab-matriz">
+        <h3>Matriz de relaciones (8 / 4 / 0)</h3>
+        <div class="row">
+          <input id="ambientesInput" placeholder="Ambientes separados por coma: Sala, Comedor, Cocina, Dorm 1, Dorm 2, S.S., Patio de servicio" style="width:100%"/>
+        </div>
+        <div class="toolbar">
+          <button id="btnInsertTable">Insertar tabla</button>
+          <button id="btnApplyPresets">Aplicar predeterminadas</button>
+          <button id="btnClearMatrix">Limpiar matriz</button>
+        </div>
+        <div class="hint">Clic en una celda para ciclar 0 → 4 → 8 (diagonal bloqueada y simetría automática). Las sumas de fila/columna deben coincidir.</div>
+        <div class="space"></div>
+        <div id="matrixHost"></div>
+        <div class="space"></div>
+        <div class="toolbar">
+          <button id="btnPreponderancia">Calcular anillos (Σ)</button>
+          <button id="btnGenerarAmbientes">Generar ambientes en anillos</button>
+          <button id="btnCopiarARelaciones" title="Pasa las burbujas al tab Relaciones">Copiar a “Relaciones”</button>
+        </div>
+        <div class="toolbar">
+          <span class="hint">Colorear zona: selecciona una burbuja y apacha un botón</span>
+          <button id="zSocial">Social</button>
+          <button id="zPrivada">Privada</button>
+          <button id="zServicio">Servicio</button>
+        </div>
+        <div class="legend">
+          <span class="chip"><svg width="14" height="14"><circle cx="7" cy="7" r="6" fill="#eef6ff" stroke="#a855f7"/></svg> Zona privada</span>
+          <span class="chip"><svg width="14" height="14"><circle cx="7" cy="7" r="6" fill="#fff7ed" stroke="#f59e0b"/></svg> Servicio</span>
+          <span class="chip"><svg width="14" height="14"><circle cx="7" cy="7" r="6" fill="#f0f9ff" stroke="#2563eb"/></svg> Social/otra</span>
+        </div>
+      </div>
+
+      <!-- ====== RELACIONES ====== -->
+      <div class="tab tab-rel" style="display:none">
+        <h3>Relaciones (línea continua = 8; punteada = 4)</h3>
+        <div class="toolbar">
+          <button id="btnGenRelaciones">Generar relaciones desde matriz</button>
+          <button id="btnClearRel">Limpiar líneas</button>
+          <label><input type="checkbox" id="chkHideRings"> Ocultar anillos</label>
+          <label><input type="checkbox" id="chkSolid" checked> Línea continua (8)</label>
+          <label><input type="checkbox" id="chkDashed" checked> Línea discontinua (4)</label>
+        </div>
+        <div class="hint">Aquí no hay flechas ni vestíbulos (eso es del diagrama de circulaciones).</div>
+      </div>
+
+      <!-- ====== CIRCULACIONES ====== -->
+      <div class="tab tab-circ" style="display:none">
+        <h3>Circulaciones</h3>
+        <div class="toolbar">
+          <button id="btnToArrows">Convertir relaciones en flechas</button>
+          <button id="btnAddText">Añadir cuadro de texto</button>
+        </div>
+        <div class="hint">Clic en una flecha para anotar % (en Flujos ajustaremos grosores por %). Los vestíbulos los puedes agregar como “VEST” en Burbujas.</div>
+      </div>
+
+      <!-- ====== BURBUJAS ====== -->
+      <div class="tab tab-burb" style="display:none">
+        <h3>Diagrama de Burbujas</h3>
+        <div class="toolbar">
+          <button id="btnToOvals">Convertir burbujas a óvalos (m²)</button>
+          <button id="btnAddWindow">Añadir ventana (V)</button>
+          <button id="btnAddVest">Añadir VEST (óvalo)</button>
+        </div>
+        <div class="hint">Asignar m² cambia el tamaño (proporcional). Arrastra la “V” y el “VEST” donde convenga.</div>
+      </div>
+
+      <!-- ====== BLOQUES ====== -->
+      <div class="tab tab-bloq" style="display:none">
+        <h3>Diagrama de Bloques</h3>
+        <div class="toolbar">
+          <button id="btnAddRect">Añadir bloque (rectángulo, m²)</button>
+          <button id="btnAddCirc">Añadir bloque (círculo, m²)</button>
+        </div>
+        <div class="hint">Se dimensionan proporcionalmente al área (aprox.).</div>
+      </div>
+
+      <!-- ====== ENTORNO ====== -->
+      <div class="tab tab-ent" style="display:none">
+        <h3>Entorno</h3>
+        <div class="toolbar">
+          <button data-sym="NORTE" class="symBtn">Norte</button>
+          <button data-sym="VISTAS" class="symBtn">Vistas</button>
+          <button data-sym="VIENTOS" class="symBtn">Vientos</button>
+          <button data-sym="SOL MAÑANA" class="symBtn">Sol (mañana)</button>
+          <button data-sym="SOL TARDE" class="symBtn">Sol (tarde)</button>
+          <button data-sym="PENDIENTE" class="symBtn">Pendiente</button>
+          <button id="btnAmbientLayer">Capa ambiental</button>
+          <button id="btnEntText">Texto</button>
+        </div>
+        <div class="hint">Todos los símbolos son arrastrables.</div>
+      </div>
+    </section>
+
+    <!-- Panel derecho: pizarra con retícula -->
+    <section class="card">
+      <div id="boardWrap">
+        <svg id="boardSVG"></svg>
+      </div>
+    </section>
+  </div>
+</main>
+
+<script>
+/* ===== Helper de errores visibles ===== */
+function showErr(e){
+  try{ console.error(e); }catch{}
+  const b = document.getElementById('errBox');
+  if(!b) return;
+  b.textContent = (e && e.message) ? e.message : String(e);
+  b.style.display = 'block';
+  setTimeout(()=> b.style.display='none', 8000);
+}
+try{
+/* ===== Versión visible y recarga forzada ===== */
+const VERSION = '1.1.2';
+document.getElementById('versionBadge').textContent = 'v'+VERSION;
+document.getElementById('forceReload').addEventListener('click', ()=>{
+  const url = new URL(window.location.href);
+  url.searchParams.set('v', VERSION + '-' + Date.now());
+  window.location.replace(url.toString());
+});
+
+/* ==========================
+   ESTADO BASE
+========================== */
+const S = {
+  zonas: {},                // nombre -> 'social' | 'privada' | 'servicio'
+  ambientes: [],            // lista ordenada
+  matrix: {},               // "A|B" => 0|4|8  (simétrica)
+  sums: {},                 // nombre -> sumatoria
+  nodes: [],                // [{name,x,y,ring,zone,rx,ry,area}]
+  rings: [],                // [{r,sum}]
+  view: 'matriz',
+  relDraw: false,
+  relOpts: { hideRings:false, showSolid:true, showDashed:true },
+  flowPct: {},              // keyAB(nameA,nameB) -> porcentaje
+  freeText: [],             // [{x,y,txt,fill}]
+  ambientLayer: false
+};
+const PRESETS = [
+  ['Cocina','Comedor',8],
+  ['Patio de servicio','Cocina',8],
+  ['Sala','Comedor',4],
+  ['Dorm 1','S.S.',4], ['Dorm 2','S.S.',4]
+];
+
+/* ==========================
+   UTILIDADES
+========================== */
+const $ = s => document.querySelector(s);
+const el = (t,attrs={}) => Object.assign(document.createElement(t), attrs);
+const keyAB = (a,b) => a < b ? `${a}|${b}` : `${b}|${a}`;
+function setRel(a,b,val){ if(a===b) return; S.matrix[keyAB(a,b)] = val; }
+function getRel(a,b){ if(a===b) return 0; return S.matrix[keyAB(a,b)] ?? 0; }
+function switchTab(tab){
+  document.querySelectorAll('.tabbtn').forEach(x=>x.classList.remove('active'));
+  document.querySelector(`.tabbtn[data-tab="${tab}"]`).classList.add('active');
+  document.querySelectorAll('.tab').forEach(x=>x.style.display='none');
+  document.querySelector(`.tab-${tab}`).style.display='';
+  S.view = tab; drawBoard(S.view==='rel' && S.relDraw);
+}
+function normalizeKey(s){
+  return s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
+}
+
+/* ==========================
+   TABS
+========================== */
+document.querySelectorAll('.tabbtn').forEach(btn=>{
+  btn.addEventListener('click', ()=> switchTab(btn.dataset.tab));
+});
+
+/* ==========================
+   MATRIZ: CREAR Y RELLENAR
+========================== */
+document.body.insertAdjacentHTML('afterbegin', '<!-- v1.1.2 build -->');
+
+document.querySelector('#btnInsertTable').addEventListener('click', ()=>{
+  const txt = document.querySelector('#ambientesInput').value.trim();
+  if(!txt) return alert('Escribe los ambientes separados por coma');
+  S.ambientes = txt.split(',').map(s=>s.trim()).filter(Boolean);
+  S.zonas = {};
+  S.ambientes.forEach(n=>{
+    const t = n.toLowerCase();
+    S.zonas[n] = t.includes('dorm') ? 'privada'
+               : (t.includes('patio')||t.includes('cocina')||t.includes('lav')) ? 'servicio'
+               : 'social';
+  });
+  S.matrix = {};
+  for(let i=0;i<S.ambientes.length;i++){
+    for(let j=i+1;j<S.ambientes.length;j++){
+      setRel(S.ambientes[i], S.ambientes[j], 0);
+    }
+  }
+  renderMatrix();
+  drawBoard();
+});
+
+document.querySelector('#btnClearMatrix').addEventListener('click', ()=>{
+  Object.keys(S.matrix).forEach(k=> S.matrix[k]=0);
+  renderMatrix();
+  drawBoard();
+});
+
+document.querySelector('#btnApplyPresets').addEventListener('click', ()=>{
+  const map = {};
+  S.ambientes.forEach(n=> map[normalizeKey(n)] = n);
+  PRESETS.forEach(([a,b,val])=>{
+    const A = map[normalizeKey(a)], B = map[normalizeKey(b)];
+    if(A && B) setRel(A,B,val);
+  });
+  renderMatrix();
+});
+
+function renderMatrix(){
+  const host = document.querySelector('#matrixHost');
+  host.innerHTML = '';
+  if(S.ambientes.length===0){ host.innerHTML = '<div class="hint">Primero inserta la lista de ambientes.</div>'; return; }
+  const tbl = el('table');
+  const thead = el('thead');
+  const hr = el('tr'); hr.append(el('th',{textContent:'—',className:'sticky'}));
+  S.ambientes.forEach(n=> hr.append(el('th',{textContent:n,className:'sticky'})));
+  hr.append(el('th',{textContent:'Σ fila',className:'sticky'}));
+  thead.append(hr); tbl.append(thead);
+  const tbody = el('tbody');
+  S.sums = {};
+  S.ambientes.forEach((a,i)=>{
+    const tr = el('tr');
+    tr.append(el('th',{textContent:a,style:'position:sticky;left:0;background:#fff;z-index:1'}));
+    let sum = 0;
+    S.ambientes.forEach((b,j)=>{
+      const td = el('td');
+      if(i===j){ td.textContent='—'; td.className='lock'; tr.append(td); return; }
+      let v = getRel(a,b);
+      sum += v;
+      td.textContent = String(v);
+      td.style.cursor = 'pointer';
+      td.addEventListener('click', ()=>{
+        const cur = getRel(a,b);
+        const nxt = cur===0 ? 4 : (cur===4 ? 8 : 0);
+        setRel(a,b,nxt);
+        renderMatrix();
+      });
+      tr.append(td);
+    });
+    S.sums[a] = sum;
+    const tdSum = el('td',{textContent:sum});
+    tr.append(tdSum);
+    tbody.append(tr);
+  });
+  const trS = el('tr');
+  trS.append(el('th',{textContent:'Σ col'}));
+  let ok = true;
+  S.ambientes.forEach((b,j)=>{
+    let s=0;
+    S.ambientes.forEach((a,i)=>{ if(i!==j) s += getRel(a,b); });
+    if(s!==S.sums[b]) ok=false;
+    trS.append(el('td',{textContent:s}));
+  });
+  trS.append(el('td',{innerHTML: ok ? '<span class="ok">✓ OK</span>' : '<span class="err">⚠ Revisar</span>'}));
+  tbody.append(trS);
+  tbl.append(tbody);
+  host.append(tbl);
+}
+
+/* ===== Preponderancia ===== */
+function computeRings(){
+  S.sums = {};
+  S.ambientes.forEach(a=>{
+    let s=0; S.ambientes.forEach(b=>{ if(a!==b) s += getRel(a,b); });
+    S.sums[a]=s;
+  });
+  const uniq = [...new Set(Object.values(S.sums))].sort((a,b)=>b-a);
+  const svg = document.querySelector('#boardSVG');
+  const W = svg.parentElement.clientWidth, H = svg.parentElement.clientHeight;
+  const RMAX = Math.floor(Math.min(W,H)/2) - 40;
+  const step = Math.max(48, Math.floor(RMAX / (uniq.length+0.5)));
+  S.rings = uniq.map((sum,idx)=>({ sum, r: step + idx*step }));
+}
+document.querySelector('#btnPreponderancia').addEventListener('click', ()=>{
+  if(S.ambientes.length===0) return alert('Primero crea la matriz.');
+  computeRings();
+  S.nodes = [];
+  drawBoard();
+});
+document.querySelector('#btnGenerarAmbientes').addEventListener('click', ()=>{
+  if(!S.rings.length){ computeRings(); }
+  const svg = document.querySelector('#boardSVG');
+  const W = svg.parentElement.clientWidth, H = svg.parentElement.clientHeight;
+  const cx = W/2, cy = H/2;
+  S.nodes = [];
+  const groups = {};
+  S.ambientes.forEach(n=>{
+    const s = S.sums[n] ?? 0;
+    groups[s] = groups[s] || []; groups[s].push(n);
+  });
+  Object.entries(groups).forEach(([sum, list])=>{
+    const ring = S.rings.find(r=>r.sum==sum);
+    list.forEach((name, idx)=>{
+      const angle = (idx / list.length) * Math.PI*2;
+      const x = cx + ring.r * Math.cos(angle);
+      const y = cy + ring.r * Math.sin(angle);
+      S.nodes.push({name, x, y, ring: ring.r, zone: S.zonas[name]||'social'});
+    });
+  });
+  drawBoard();
+});
+document.querySelector('#btnCopiarARelaciones').addEventListener('click', ()=> switchTab('rel'));
+
+/* ===== Relaciones ===== */
+document.querySelector('#btnGenRelaciones').addEventListener('click', ()=>{ S.relDraw=true; switchTab('rel'); });
+document.querySelector('#btnClearRel').addEventListener('click', ()=>{ S.relDraw=false; drawBoard(false); });
+document.querySelector('#chkHideRings').addEventListener('change', e=>{ S.relOpts.hideRings = e.target.checked; drawBoard(S.relDraw); });
+document.querySelector('#chkSolid').addEventListener('change', e=>{ S.relOpts.showSolid = e.target.checked; drawBoard(S.relDraw); });
+document.querySelector('#chkDashed').addEventListener('change', e=>{ S.relOpts.showDashed = e.target.checked; drawBoard(S.relDraw); });
+
+/* ===== Circulaciones ===== */
+document.querySelector('#btnToArrows').addEventListener('click', ()=>{ switchTab('circ'); });
+document.querySelector('#btnAddText').addEventListener('click', ()=>{
+  const txt = prompt('Texto:'); if(!txt) return;
+  const svg = document.querySelector('#boardSVG'); const W = svg.clientWidth, H = svg.clientHeight;
+  const x = W/2, y = 30 + Math.random()*60;
+  S.freeText.push({x,y,txt,fill:'#111'});
+  drawBoard(S.relDraw);
+});
+
+/* ===== Burbujas ===== */
+document.querySelector('#btnToOvals').addEventListener('click', ()=>{
+  if(!S.nodes.length) return alert('Genera primero las burbujas.');
+  let maxA=0; const areas={};
+  S.nodes.forEach(n=>{
+    const v = prompt(`Área en m² para "${n.name}":`, n.area||'');
+    if(v==null) return;
+    const a = Math.max(1, Number(v)||1); areas[n.name]=a; if(a>maxA) maxA=a;
+  });
+  const maxR = 42;
+  const k = maxR / Math.sqrt(maxA||1);
+  S.nodes.forEach(n=>{
+    const a = areas[n.name] || 1; n.area=a;
+    const base = Math.sqrt(a)*k;
+    n.rx = base * 1.2; n.ry = base * 0.9;
+  });
+  switchTab('burb');
+});
+document.querySelector('#btnAddWindow').addEventListener('click', ()=>{
+  const svg = document.querySelector('#boardSVG'); const W = svg.clientWidth, H = svg.clientHeight;
+  const x = W/2 + (Math.random()*60-30), y = H/2 + (Math.random()*60-30);
+  S.freeText.push({x,y,txt:'V',fill:'#111'});
+  drawBoard();
+});
+document.querySelector('#btnAddVest').addEventListener('click', ()=>{
+  const svg = document.querySelector('#boardSVG'); const W = svg.clientWidth, H = svg.clientHeight;
+  const x = W/2, y = H/2;
+  S.nodes.push({name:'VEST', x, y, rx:26, ry:18, lock:false, zone:'servicio'});
+  switchTab('burb');
+});
+
+/* ===== Bloques ===== */
+function addBlock(kind){
+  const name = prompt('Nombre del bloque:'); if(!name) return;
+  const a = Number(prompt('Área m²:','20'))||20;
+  const svg = document.querySelector('#boardSVG'); const W = svg.clientWidth, H = svg.clientHeight;
+  const x = W/2 + (Math.random()*80-40), y = H/2 + (Math.random()*80-40);
+  const scale = 6;
+  const base = Math.sqrt(a)*scale;
+  if(kind==='rect'){
+    S.nodes.push({name: `${name} ${a} m²`, x, y, rx: base*1.2, ry: base*0.8, lock:false, zone:'social'});
+  }else{
+    S.nodes.push({name: `${name} ${a} m²`, x, y, rx: base, ry: base, lock:false, zone:'social'});
+  }
+  switchTab('bloq');
+}
+document.querySelector('#btnAddRect').addEventListener('click', ()=> addBlock('rect'));
+document.querySelector('#btnAddCirc').addEventListener('click', ()=> addBlock('circ'));
+
+/* ===== Entorno ===== */
+document.querySelectorAll('.symBtn').forEach(b=>{
+  b.addEventListener('click', ()=>{
+    const label = b.getAttribute('data-sym');
+    const svg = document.querySelector('#boardSVG'); const W = svg.clientWidth, H = svg.clientHeight;
+    const x = 30 + Math.random()*80, y = 40 + Math.random()*80;
+    S.freeText.push({x,y,txt:label,fill:'#094'});
+    switchTab('ent');
+  });
+});
+document.querySelector('#btnAmbientLayer').addEventListener('click', ()=>{ S.ambientLayer = !S.ambientLayer; drawBoard(); });
+document.querySelector('#btnEntText').addEventListener('click', ()=>{
+  const txt = prompt('Texto:'); if(!txt) return;
+  const svg = document.querySelector('#boardSVG'); const x = svg.clientWidth/2, y = svg.clientHeight-20;
+  S.freeText.push({x,y,txt,fill:'#111'});
+  drawBoard();
+});
+
+/* ===== Zonas (color) ===== */
+let selectedNode = null;
+document.addEventListener('click', (e)=>{
+  const g = e.target.closest('.node');
+  if(!g) { selectedNode=null; return; }
+  const label = g.querySelector('text')?.textContent;
+  selectedNode = S.nodes.find(n=> n.name===label) || null;
+});
+function setZone(z){
+  if(!selectedNode){ alert('Primero selecciona una burbuja'); return; }
+  selectedNode.zone = z; drawBoard(S.view==='rel' && S.relDraw);
+}
+document.querySelector('#zSocial').addEventListener('click', ()=> setZone('social'));
+document.querySelector('#zPrivada').addEventListener('click', ()=> setZone('privada'));
+document.querySelector('#zServicio').addEventListener('click', ()=> setZone('servicio'));
+
+/* ===== Pizarra (SVG) ===== */
+function drawBoard(drawEdges=false){
+  const svg = document.querySelector('#boardSVG');
+  svg.innerHTML = '';
+  const W = svg.parentElement.clientWidth, H = svg.parentElement.clientHeight;
+  svg.setAttribute('width', W); svg.setAttribute('height', H);
+  const cx = W/2, cy = H/2;
+
+  if(S.ambientLayer){
+    const rect = document.createElementNS('http://www.w3.org/2000/svg','rect');
+    rect.setAttribute('x', 10); rect.setAttribute('y', 10);
+    rect.setAttribute('width', W-20); rect.setAttribute('height', H-20);
+    rect.setAttribute('fill','rgba(0,160,255,.05)'); rect.setAttribute('stroke','#00a0ff');
+    rect.setAttribute('stroke-dasharray','8 8');
+    svg.appendChild(rect);
+  }
+
+  const gRings = document.createElementNS('http://www.w3.org/2000/svg','g');
+  if(S.view==='rel' && S.relOpts?.hideRings) gRings.classList.add('hiddenRings');
+  svg.appendChild(gRings);
+
+  if((S.view==='matriz' || S.view==='rel' || S.view==='circ') && S.rings.length){
+    S.rings.forEach((r)=>{
+      const c = document.createElementNS('http://www.w3.org/2000/svg','circle');
+      c.setAttribute('cx', cx); c.setAttribute('cy', cy); c.setAttribute('r', r.r);
+      c.setAttribute('fill', 'none'); c.setAttribute('stroke', '#bcd0ff'); c.setAttribute('stroke-width','1.2');
+      gRings.appendChild(c);
+      const t = document.createElementNS('http://www.w3.org/2000/svg','text');
+      t.setAttribute('x', cx + r.r + 6); t.setAttribute('y', cy - 6);
+      t.setAttribute('fill', '#5f6b86'); t.textContent = `Σ = ${r.sum}`;
+      gRings.appendChild(t);
+    });
+  }
+
+  const defs = document.createElementNS('http://www.w3.org/2000/svg','defs'); svg.appendChild(defs);
+  if(S.view==='circ'){
+    const mk = document.createElementNS('http://www.w3.org/2000/svg','marker');
+    mk.setAttribute('id','arrow'); mk.setAttribute('markerWidth','10'); mk.setAttribute('markerHeight','10');
+    mk.setAttribute('refX','10'); mk.setAttribute('refY','3'); mk.setAttribute('orient','auto');
+    mk.innerHTML = '<path d="M0,0 L10,3 L0,6 Z" fill="#1f2937"/>';
+    defs.appendChild(mk);
+  }
+
+  const gEdges = document.createElementNS('http://www.w3.org/2000/svg','g'); svg.appendChild(gEdges);
+  if(S.nodes.length){
+    for(let i=0;i<S.nodes.length;i++){
+      for(let j=i+1;j<S.nodes.length;j++){
+        const a = S.nodes[i], b = S.nodes[j];
+        const val = getRel(a.name, b.name);
+        if(!val) continue;
+        if(S.view==='rel' && drawEdges){
+          const line = document.createElementNS('http://www.w3.org/2000/svg','line');
+          line.setAttribute('x1', a.x); line.setAttribute('y1', a.y);
+          line.setAttribute('x2', b.x); line.setAttribute('y2', b.y);
+          line.setAttribute('stroke', '#1f2937');
+          line.setAttribute('stroke-width', '1.8');
+          if(val===4 && S.relOpts?.showDashed) line.setAttribute('stroke-dasharray','6 6');
+          if(val===8 && !S.relOpts?.showSolid) continue;
+          gEdges.appendChild(line);
+        }
+        if(S.view==='circ'){
+          const line = document.createElementNS('http://www.w3.org/2000/svg','line');
+          line.setAttribute('x1', a.x); line.setAttribute('y1', a.y);
+          line.setAttribute('x2', b.x); line.setAttribute('y2', b.y);
+          line.setAttribute('stroke', '#1f2937');
+          line.setAttribute('stroke-width', '1.8');
+          line.setAttribute('marker-end','url(#arrow)');
+          const k = keyAB(a.name,b.name);
+          const pct = S.flowPct[k];
+          if(pct!=null){
+            const mx = (a.x+b.x)/2, my = (a.y+b.y)/2;
+            const lbl = document.createElementNS('http://www.w3.org/2000/svg','text');
+            lbl.setAttribute('x', mx+6); lbl.setAttribute('y', my-6);
+            lbl.setAttribute('fill', '#1f2937'); lbl.setAttribute('font-size','12');
+            lbl.textContent = pct + '%';
+            gEdges.appendChild(lbl);
+          }
+          line.addEventListener('click', ()=>{
+            const v = prompt('Porcentaje de flujo (0-100):', (S.flowPct?.[k] ?? ''));
+            if(v==null) return;
+            const n = Math.max(0, Math.min(100, Number(v)||0));
+            S.flowPct[k]=n;
+            drawBoard(drawEdges);
+          });
+          gEdges.appendChild(line);
+        }
+      }
+    }
+  }
+
+  const gNodes = document.createElementNS('http://www.w3.org/2000/svg','g'); svg.appendChild(gNodes);
+  S.nodes.forEach(n=>{
+    const g = document.createElementNS('http://www.w3.org/2000/svg','g');
+    g.classList.add('node'); g.dataset.zone = n.zone || 'social';
+    g.setAttribute('transform', `translate(${n.x},${n.y})`);
+
+    let mainShape;
+    if(n.rx && n.ry){
+      mainShape = document.createElementNS('http://www.w3.org/2000/svg','ellipse');
+      mainShape.setAttribute('rx', n.rx); mainShape.setAttribute('ry', n.ry);
+      mainShape.setAttribute('fill', '#f0f9ff'); mainShape.setAttribute('stroke','#2563eb'); mainShape.setAttribute('stroke-width','1.5');
+    }else{
+      mainShape = document.createElementNS('http://www.w3.org/2000/svg','circle');
+      mainShape.setAttribute('r','16');
+    }
+    g.appendChild(mainShape);
+
+    const t = document.createElementNS('http://www.w3.org/2000/svg','text');
+    t.setAttribute('text-anchor','middle'); t.setAttribute('dy','.35em'); t.textContent = n.name;
+    g.appendChild(t);
+
+    let dragging=false;
+    g.addEventListener('mousedown', ()=>{ dragging=true; g.classList.add('dragging'); });
+    svg.addEventListener('mouseup', ()=>{ dragging=false; g.classList.remove('dragging'); });
+    svg.addEventListener('mouseleave', ()=>{ dragging=false; g.classList.remove('dragging'); });
+    svg.addEventListener('mousemove', (e)=>{
+      if(!dragging || n.lock) return;
+      const p = svg.getBoundingClientRect();
+      const x = e.clientX - p.left, y = e.clientY - p.top;
+      if(['matriz','rel','circ'].includes(S.view)){
+        const ang = Math.atan2(y-cy, x-cx);
+        n.x = cx + (n.ring||16) * Math.cos(ang);
+        n.y = cy + (n.ring||16) * Math.sin(ang);
+      }else{
+        n.x = x; n.y = y;
+      }
+      drawBoard(drawEdges);
+    });
+
+    gNodes.appendChild(g);
+  });
+
+  if(S.freeText.length){
+    const gT = document.createElementNS('http://www.w3.org/2000/svg','g'); svg.appendChild(gT);
+    S.freeText.forEach(item=>{
+      const tt = document.createElementNS('http://www.w3.org/2000/svg','text');
+      tt.setAttribute('x', item.x); tt.setAttribute('y', item.y);
+      tt.setAttribute('fill', item.fill || '#111'); tt.setAttribute('font-size','14');
+      tt.setAttribute('text-anchor','middle'); tt.textContent = item.txt;
+      let dragging=false, off=[0,0];
+      tt.addEventListener('mousedown', (e)=>{ dragging=true; const bb = tt.getBBox(); off=[e.clientX-bb.x, e.clientY-bb.y]; });
+      svg.addEventListener('mouseup', ()=> dragging=false);
+      svg.addEventListener('mousemove', (e)=>{
+        if(!dragging) return;
+        const p = svg.getBoundingClientRect();
+        item.x = e.clientX - p.left - off[0]; item.y = e.clientY - p.top - off[1];
+        tt.setAttribute('x', item.x); tt.setAttribute('y', item.y);
+      });
+      gT.appendChild(tt);
+    });
+  }
+}
+
+drawBoard();
+} catch(e){ showErr(e); }
+</script>
+</body>
+</html>
