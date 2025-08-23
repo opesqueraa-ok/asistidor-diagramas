@@ -43,13 +43,15 @@
   .legend .chip{display:inline-flex;gap:6px;align-items:center;border:1px solid var(--border);background:var(--chip);border-radius:999px;padding:4px 8px}
   .dash{stroke-dasharray:6 6}
   .toolbar{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}
+  .hiddenRings { opacity:.15; transition:opacity .2s ease; }
+  .node.dragging circle{ stroke:#111; stroke-width:2.2 }
 </style>
 </head>
 <body>
 <header>
   <div class="wrap">
     <h1>Diag‑Assist</h1>
-    <div class="sub">Matriz 8/4/0 → Preponderancia (anillos) → Relaciones. Basado en tu guía de diagramación (círculos iguales, sin flechas en relaciones). </div>
+    <div class="sub">Matriz 8/4/0 → Preponderancia (anillos) → Relaciones. Basado en la guía de diagramación (círculos iguales; sin flechas en relaciones).</div>
     <div class="tabs">
       <button class="tabbtn active" data-tab="matriz">Matriz de Relaciones</button>
       <button class="tabbtn" data-tab="rel">Relaciones</button>
@@ -76,13 +78,20 @@
           <button id="btnApplyPresets">Aplicar predeterminadas</button>
           <button id="btnClearMatrix">Limpiar matriz</button>
         </div>
-        <div class="hint">Clic en una celda para ciclar 0 → 4 → 8 (la diagonal está bloqueada y se copia simétrico). Las sumas de filas/columnas deben coincidir.</div>
+        <div class="hint">Clic en una celda para ciclar 0 → 4 → 8 (diagonal bloqueada y simetría automática). Las sumas de fila/columna deben coincidir.</div>
         <div class="space"></div>
         <div id="matrixHost"></div>
         <div class="space"></div>
         <div class="toolbar">
-          <button id="btnPreponderancia">Generar preponderancia (anillos)</button>
-          <button id="btnCopiarARelaciones" title="Pasa las mismas burbujas al tab Relaciones">Copiar a “Relaciones”</button>
+          <button id="btnPreponderancia">Calcular anillos (Σ)</button>
+          <button id="btnGenerarAmbientes">Generar ambientes en anillos</button>
+          <button id="btnCopiarARelaciones" title="Pasa las burbujas al tab Relaciones">Copiar a “Relaciones”</button>
+        </div>
+        <div class="toolbar">
+          <span class="hint">Colorear zona: selecciona una burbuja y apacha un botón</span>
+          <button id="zSocial">Social</button>
+          <button id="zPrivada">Privada</button>
+          <button id="zServicio">Servicio</button>
         </div>
         <div class="legend">
           <span class="chip"><svg width="14" height="14"><circle cx="7" cy="7" r="6" fill="#eef6ff" stroke="#a855f7"/></svg> Zona privada</span>
@@ -97,37 +106,59 @@
         <div class="toolbar">
           <button id="btnGenRelaciones">Generar relaciones desde matriz</button>
           <button id="btnClearRel">Limpiar líneas</button>
+          <label><input type="checkbox" id="chkHideRings"> Ocultar anillos</label>
+          <label><input type="checkbox" id="chkSolid" checked> Línea continua (8)</label>
+          <label><input type="checkbox" id="chkDashed" checked> Línea discontinua (4)</label>
         </div>
         <div class="hint">Aquí no hay flechas ni vestíbulos (eso es del diagrama de circulaciones).</div>
       </div>
 
-      <!-- Stubs para las siguientes pestañas -->
+      <!-- ====== CIRCULACIONES ====== -->
       <div class="tab tab-circ" style="display:none">
-        <h3>Circulaciones (próximo paso)</h3>
-        <div class="hint">Se usarán flechas y vestíbulos; podrás anotar % en cada flecha, como indica tu guía.</div>
-      </div>
-      <div class="tab tab-burb" style="display:none">
-        <h3>Diagrama de Burbujas (próximo paso)</h3>
-        <div class="hint">Óvalos proporcionales a m² y símbolo “V” para ventanas; los iremos activando en el siguiente sprint.</div>
-      </div>
-      <div class="tab tab-bloq" style="display:none">
-        <h3>Diagrama de Bloques (próximo paso)</h3>
-        <div class="hint">Rectángulos/círculos con medidas, a escala aproximada a partir de las burbujas.</div>
-      </div>
-      <div class="tab tab-ent" style="display:none">
-        <h3>Entorno (próximo paso)</h3>
-        <div class="hint">Norte, vistas, vientos, sol, pendiente… capa ambiental para orientar decisiones.</div>
+        <h3>Circulaciones</h3>
+        <div class="toolbar">
+          <button id="btnToArrows">Convertir relaciones en flechas</button>
+          <button id="btnAddText">Añadir cuadro de texto</button>
+        </div>
+        <div class="hint">Clic en una flecha para anotar % (en Flujos ajustaremos grosores por %). Los vestíbulos los puedes agregar como “VEST” en Burbujas.</div>
       </div>
 
-      <div class="space"></div>
-      <h4>Predeterminadas (reglas rápidas)</h4>
-      <div class="hint">Se aplican al apachar “Aplicar predeterminadas”. Puedes editarlas en el código.</div>
-      <ul style="margin:6px 0 0 16px;padding:0;line-height:1.6">
-        <li>Cocina ↔ Comedor = <b>8</b> (necesaria)</li>
-        <li>Sala ↔ Comedor = <b>4</b> (deseable)</li>
-        <li>Dormitorios ↔ S.S. = <b>4</b> (deseable/cercano)</li>
-        <li>Patio de servicio ↔ Cocina/Lav. = <b>8</b> (necesaria)</li>
-      </ul>
+      <!-- ====== BURBUJAS ====== -->
+      <div class="tab tab-burb" style="display:none">
+        <h3>Diagrama de Burbujas</h3>
+        <div class="toolbar">
+          <button id="btnToOvals">Convertir burbujas a óvalos (m²)</button>
+          <button id="btnAddWindow">Añadir ventana (V)</button>
+          <button id="btnAddVest">Añadir VEST (óvalo)</button>
+        </div>
+        <div class="hint">Asignar m² cambia el tamaño (proporcional). Arrastra la “V” y el “VEST” donde convenga.</div>
+      </div>
+
+      <!-- ====== BLOQUES ====== -->
+      <div class="tab tab-bloq" style="display:none">
+        <h3>Diagrama de Bloques</h3>
+        <div class="toolbar">
+          <button id="btnAddRect">Añadir bloque (rectángulo, m²)</button>
+          <button id="btnAddCirc">Añadir bloque (círculo, m²)</button>
+        </div>
+        <div class="hint">Se dimensionan proporcionalmente al área (aprox.).</div>
+      </div>
+
+      <!-- ====== ENTORNO ====== -->
+      <div class="tab tab-ent" style="display:none">
+        <h3>Entorno</h3>
+        <div class="toolbar">
+          <button data-sym="NORTE" class="symBtn">Norte</button>
+          <button data-sym="VISTAS" class="symBtn">Vistas</button>
+          <button data-sym="VIENTOS" class="symBtn">Vientos</button>
+          <button data-sym="SOL MAÑANA" class="symBtn">Sol (mañana)</button>
+          <button data-sym="SOL TARDE" class="symBtn">Sol (tarde)</button>
+          <button data-sym="PENDIENTE" class="symBtn">Pendiente</button>
+          <button id="btnAmbientLayer">Capa ambiental</button>
+          <button id="btnEntText">Texto</button>
+        </div>
+        <div class="hint">Todos los símbolos son arrastrables.</div>
+      </div>
     </section>
 
     <!-- Panel derecho: pizarra con retícula -->
@@ -148,9 +179,14 @@ const S = {
   ambientes: [],            // lista ordenada
   matrix: {},               // "A|B" => 0|4|8  (simétrica)
   sums: {},                 // nombre -> sumatoria
-  nodes: [],                // [{name,x,y,ring,zone}]
+  nodes: [],                // [{name,x,y,ring,zone,rx,ry,area}]
   rings: [],                // [{r,sum}]
-  view: 'matriz'
+  view: 'matriz',
+  relDraw: false,
+  relOpts: { hideRings:false, showSolid:true, showDashed:true },
+  flowPct: {},             // keyAB(nameA,nameB) -> porcentaje
+  freeText: [],            // [{x,y,txt,fill}]
+  ambientLayer: false
 };
 // Reglas predeterminadas (puedes editar estas tuplas)
 const PRESETS = [
@@ -165,23 +201,22 @@ const PRESETS = [
 ========================== */
 const $ = s => document.querySelector(s);
 const el = (t,attrs={}) => Object.assign(document.createElement(t), attrs);
-const keyAB = (a,b) => a < b ? `${a}|${b}` : `${b}|${a}`;
+const keyAB = (a,b) => a < b ? \`\${a}|\${b}\` : \`\${b}|\${a}\`;
 function setRel(a,b,val){ if(a===b) return; S.matrix[keyAB(a,b)] = val; }
 function getRel(a,b){ if(a===b) return 0; return S.matrix[keyAB(a,b)] ?? 0; }
+function switchTab(tab){
+  document.querySelectorAll('.tabbtn').forEach(x=>x.classList.remove('active'));
+  document.querySelector(\`.tabbtn[data-tab="\${tab}"]\`).classList.add('active');
+  document.querySelectorAll('.tab').forEach(x=>x.style.display='none');
+  document.querySelector(\`.tab-\${tab}\`).style.display='';
+  S.view = tab; drawBoard(S.view==='rel' && S.relDraw);
+}
 
 /* ==========================
    TABS
 ========================== */
 document.querySelectorAll('.tabbtn').forEach(btn=>{
-  btn.addEventListener('click', ()=>{
-    document.querySelectorAll('.tabbtn').forEach(x=>x.classList.remove('active'));
-    btn.classList.add('active');
-    const tab = btn.dataset.tab;
-    S.view = tab;
-    document.querySelectorAll('.tab').forEach(x=>x.style.display='none');
-    $(`.tab-${tab}`).style.display = '';
-    drawBoard(); // redibuja lo que va en pizarra
-  });
+  btn.addEventListener('click', ()=> switchTab(btn.dataset.tab));
 });
 
 /* ==========================
@@ -217,8 +252,13 @@ $('#btnClearMatrix').addEventListener('click', ()=>{
 });
 
 $('#btnApplyPresets').addEventListener('click', ()=>{
+  const norm = s => s.normalize('NFD').replace(/\\p{Diacritic}/gu,'').toLowerCase().trim();
+  // mapa normalizado -> nombre real
+  const map = {};
+  S.ambientes.forEach(n=> map[norm(n)] = n);
   PRESETS.forEach(([a,b,val])=>{
-    if(S.ambientes.includes(a) && S.ambientes.includes(b)) setRel(a,b,val);
+    const A = map[norm(a)], B = map[norm(b)];
+    if(A && B) setRel(A,B,val);
   });
   renderMatrix();
 });
@@ -283,118 +323,331 @@ function renderMatrix(){
 
 /* ==========================
    PREPONDERANCIA (ANILLOS)
-   — Agrupa por suma; anillos concéntricos y burbujas en el borde
 ========================== */
-$('#btnPreponderancia').addEventListener('click', ()=>{
-  if(S.ambientes.length===0) return alert('Primero crea la matriz.');
-  // 1) calcular sumas por ambiente
+function computeRings(){
+  // 1) calcular sumas
   S.sums = {};
   S.ambientes.forEach(a=>{
     let s=0; S.ambientes.forEach(b=>{ if(a!==b) s += getRel(a,b); });
     S.sums[a]=s;
   });
-  // 2) agrupar por suma, orden desc (Rango 1 = mayor)
-  const sumsUniq = [...new Set(Object.values(S.sums))].sort((a,b)=>b-a);
-  S.rings = sumsUniq.map((sum,idx)=>({ sum, r: 80 + idx*60 }));
-  // 3) distribuir burbujas sobre cada anillo
+  // 2) rangos únicos desc
+  const uniq = [...new Set(Object.values(S.sums))].sort((a,b)=>b-a);
+  // 3) radios seguros
+  const svg = $('#boardSVG');
+  const W = svg.parentElement.clientWidth, H = svg.parentElement.clientHeight;
+  const RMAX = Math.floor(Math.min(W,H)/2) - 40;        // margen 40px
+  const step = Math.max(48, Math.floor(RMAX / (uniq.length+0.5)));
+  S.rings = uniq.map((sum,idx)=>({ sum, r: step + idx*step }));
+}
+$('#btnPreponderancia').addEventListener('click', ()=>{
+  if(S.ambientes.length===0) return alert('Primero crea la matriz.');
+  computeRings();
+  S.nodes = []; // aún no instanciamos nodos; eso lo hará "Generar ambientes"
+  drawBoard();
+});
+$('#btnGenerarAmbientes').addEventListener('click', ()=>{
+  if(!S.rings.length){ computeRings(); }
+  // distribuir burbujas por anillo según Σ, separadas angularmente
+  const svg = $('#boardSVG');
+  const W = svg.parentElement.clientWidth, H = svg.parentElement.clientHeight;
+  const cx = W/2, cy = H/2;
+
   S.nodes = [];
-  S.ambientes.forEach(name=>{
-    const sum = S.sums[name];
-    const ring = S.rings.find(r=>r.sum===sum);
-    const same = S.ambientes.filter(n=>S.sums[n]===sum);
-    const idx = same.indexOf(name);
-    const angle = (idx / same.length) * Math.PI*2; // radianes
-    const cx = 420, cy = 320; // centro fijo
-    const x = cx + ring.r * Math.cos(angle);
-    const y = cy + ring.r * Math.sin(angle);
-    S.nodes.push({name, x, y, ring: ring.r, zone: S.zonas[name]||'social'});
+  const groups = {}; // sum -> [names]
+  S.ambientes.forEach(n=>{
+    const s = S.sums[n] ?? 0;
+    groups[s] = groups[s] || []; groups[s].push(n);
   });
-  S.view = 'matriz'; drawBoard();
+
+  Object.entries(groups).forEach(([sum, list])=>{
+    const ring = S.rings.find(r=>r.sum==sum);
+    list.forEach((name, idx)=>{
+      const angle = (idx / list.length) * Math.PI*2;
+      const x = cx + ring.r * Math.cos(angle);
+      const y = cy + ring.r * Math.sin(angle);
+      S.nodes.push({name, x, y, ring: ring.r, zone: S.zonas[name]||'social'});
+    });
+  });
+  drawBoard();
+});
+$('#btnCopiarARelaciones').addEventListener('click', ()=> switchTab('rel'));
+
+/* ==========================
+   RELACIONES
+========================== */
+$('#btnGenRelaciones').addEventListener('click', ()=>{ S.relDraw=true; switchTab('rel'); });
+$('#btnClearRel').addEventListener('click', ()=>{ S.relDraw=false; drawBoard(false); });
+$('#chkHideRings').addEventListener('change', e=>{ S.relOpts.hideRings = e.target.checked; drawBoard(S.relDraw); });
+$('#chkSolid').addEventListener('change', e=>{ S.relOpts.showSolid = e.target.checked; drawBoard(S.relDraw); });
+$('#chkDashed').addEventListener('change', e=>{ S.relOpts.showDashed = e.target.checked; drawBoard(S.relDraw); });
+
+/* ==========================
+   CIRCULACIONES
+========================== */
+$('#btnToArrows').addEventListener('click', ()=>{ switchTab('circ'); });
+$('#btnAddText').addEventListener('click', ()=>{
+  const txt = prompt('Texto:'); if(!txt) return;
+  const svg = $('#boardSVG'); const W = svg.clientWidth, H = svg.clientHeight;
+  const x = W/2, y = 30 + Math.random()*60;
+  S.freeText.push({x,y,txt,fill:'#111'});
+  drawBoard(S.relDraw);
 });
 
-/* Copiar nodos a la pestaña Relaciones */
-$('#btnCopiarARelaciones').addEventListener('click', ()=>{
-  // solo cambiamos de pestaña; reutilizamos los mismos nodos
-  document.querySelectorAll('.tabbtn').forEach(x=>x.classList.remove('active'));
-  document.querySelector('.tabbtn[data-tab="rel"]').classList.add('active');
-  document.querySelectorAll('.tab').forEach(x=>x.style.display='none');
-  $('.tab-rel').style.display='';
-  S.view='rel';
+/* ==========================
+   BURBUJAS
+========================== */
+$('#btnToOvals').addEventListener('click', ()=>{
+  if(!S.nodes.length) return alert('Genera primero las burbujas.');
+  // pedir áreas
+  let maxA=0; const areas={};
+  S.nodes.forEach(n=>{
+    const v = prompt(\`Área en m² para "\${n.name}":\`, n.area||'');
+    if(v==null) return;
+    const a = Math.max(1, Number(v)||1); areas[n.name]=a; if(a>maxA) maxA=a;
+  });
+  // escalar rx/ry relativos a sqrt(m2)
+  const maxR = 42; // radio nominal
+  const k = maxR / Math.sqrt(maxA||1);
+  S.nodes.forEach(n=>{
+    const a = areas[n.name] || 1; n.area=a;
+    const base = Math.sqrt(a)*k;
+    n.rx = base * 1.2; n.ry = base * 0.9;
+  });
+  switchTab('burb');
+});
+$('#btnAddWindow').addEventListener('click', ()=>{
+  const svg = $('#boardSVG'); const W = svg.clientWidth, H = svg.clientHeight;
+  const x = W/2 + (Math.random()*60-30), y = H/2 + (Math.random()*60-30);
+  S.freeText.push({x,y,txt:'V',fill:'#111'});
+  drawBoard();
+});
+$('#btnAddVest').addEventListener('click', ()=>{
+  const svg = $('#boardSVG'); const W = svg.clientWidth, H = svg.clientHeight;
+  const x = W/2, y = H/2;
+  S.nodes.push({name:'VEST', x, y, rx:26, ry:18, lock:false, zone:'servicio'});
+  switchTab('burb');
+});
+
+/* ==========================
+   BLOQUES
+========================== */
+function addBlock(kind){
+  const name = prompt('Nombre del bloque:'); if(!name) return;
+  const a = Number(prompt('Área m²:','20'))||20;
+  const svg = $('#boardSVG'); const W = svg.clientWidth, H = svg.clientHeight;
+  const x = W/2 + (Math.random()*80-40), y = H/2 + (Math.random()*80-40);
+  const scale = 6; // píxeles por sqrt(m²)
+  const base = Math.sqrt(a)*scale;
+  if(kind==='rect'){
+    S.nodes.push({name: \`\${name} \${a} m²\`, x, y, rx: base*1.2, ry: base*0.8, lock:false, zone:'social'}); // óvalo como proxy
+  }else{
+    S.nodes.push({name: \`\${name} \${a} m²\`, x, y, rx: base, ry: base, lock:false, zone:'social'}); // círculo como óvalo simétrico
+  }
+  switchTab('bloq');
+}
+$('#btnAddRect').addEventListener('click', ()=> addBlock('rect'));
+$('#btnAddCirc').addEventListener('click', ()=> addBlock('circ'));
+
+/* ==========================
+   ENTORNO
+========================== */
+document.querySelectorAll('.symBtn').forEach(b=>{
+  b.addEventListener('click', ()=>{
+    const label = b.getAttribute('data-sym');
+    const svg = $('#boardSVG'); const W = svg.clientWidth, H = svg.clientHeight;
+    const x = 30 + Math.random()*80, y = 40 + Math.random()*80;
+    S.freeText.push({x,y,txt:label,fill:'#094'});
+    switchTab('ent');
+  });
+});
+$('#btnAmbientLayer').addEventListener('click', ()=>{ S.ambientLayer = !S.ambientLayer; drawBoard(); });
+$('#btnEntText').addEventListener('click', ()=>{
+  const txt = prompt('Texto:'); if(!txt) return;
+  const svg = $('#boardSVG'); const x = svg.clientWidth/2, y = svg.clientHeight-20;
+  S.freeText.push({x,y,txt,fill:'#111'});
   drawBoard();
 });
 
 /* ==========================
-   RELACIONES: DIBUJAR LÍNEAS
+   ZONAS (color)
 ========================== */
-$('#btnGenRelaciones').addEventListener('click', ()=>{
-  if(!S.nodes.length) return alert('Primero genera la preponderancia (anillos).');
-  S.view='rel'; drawBoard(true);
+let selectedNode = null;
+document.addEventListener('click', (e)=>{
+  const g = e.target.closest('.node');
+  if(!g) { selectedNode=null; return; }
+  const label = g.querySelector('text')?.textContent;
+  selectedNode = S.nodes.find(n=> n.name===label) || null;
 });
-$('#btnClearRel').addEventListener('click', ()=>{ S.view='rel'; drawBoard(false); });
+function setZone(z){
+  if(!selectedNode){ alert('Primero selecciona una burbuja'); return; }
+  selectedNode.zone = z; drawBoard(S.view==='rel' && S.relDraw);
+}
+$('#zSocial').addEventListener('click', ()=> setZone('social'));
+$('#zPrivada').addEventListener('click', ()=> setZone('privada'));
+$('#zServicio').addEventListener('click', ()=> setZone('servicio'));
 
 /* ==========================
-   PIZARRA (SVG): anillos, nodos, líneas
+   PIZARRA (SVG): anillos, nodos, líneas, textos
 ========================== */
 function drawBoard(drawEdges=false){
   const svg = $('#boardSVG');
   svg.innerHTML = '';
-  const W = svg.clientWidth || svg.parentElement.clientWidth;
-  const H = svg.clientHeight || svg.parentElement.clientHeight;
+  const W = svg.parentElement.clientWidth, H = svg.parentElement.clientHeight;
   svg.setAttribute('width', W); svg.setAttribute('height', H);
-
   const cx = W/2, cy = H/2;
 
-  // Dibuja anillos SOLO en vista matriz/rel si hay
-  if(['matriz','rel'].includes(S.view) && S.rings.length){
-    S.rings.forEach((r,i)=>{
+  // capa ambiental (si está activa)
+  if(S.ambientLayer){
+    const rect = document.createElementNS('http://www.w3.org/2000/svg','rect');
+    rect.setAttribute('x', 10); rect.setAttribute('y', 10);
+    rect.setAttribute('width', W-20); rect.setAttribute('height', H-20);
+    rect.setAttribute('fill','rgba(0,160,255,.05)'); rect.setAttribute('stroke','#00a0ff');
+    rect.setAttribute('stroke-dasharray','8 8');
+    svg.appendChild(rect);
+  }
+
+  // grupo anillos
+  const gRings = document.createElementNS('http://www.w3.org/2000/svg','g');
+  if(S.view==='rel' && S.relOpts?.hideRings) gRings.classList.add('hiddenRings');
+  svg.appendChild(gRings);
+
+  if((S.view==='matriz' || S.view==='rel' || S.view==='circ') && S.rings.length){
+    S.rings.forEach((r)=>{
       const c = document.createElementNS('http://www.w3.org/2000/svg','circle');
       c.setAttribute('cx', cx); c.setAttribute('cy', cy); c.setAttribute('r', r.r);
       c.setAttribute('fill', 'none'); c.setAttribute('stroke', '#bcd0ff'); c.setAttribute('stroke-width','1.2');
-      svg.appendChild(c);
-      // etiqueta de rango (suma)
+      gRings.appendChild(c);
       const t = document.createElementNS('http://www.w3.org/2000/svg','text');
       t.setAttribute('x', cx + r.r + 6); t.setAttribute('y', cy - 6);
-      t.setAttribute('fill', '#5f6b86'); t.textContent = `Σ = ${r.sum}`;
-      svg.appendChild(t);
+      t.setAttribute('fill', '#5f6b86'); t.textContent = \`Σ = \${r.sum}\`;
+      gRings.appendChild(t);
     });
   }
 
-  // Nodos (burbujas) si existen
-  if(S.nodes.length){
-    // grupo líneas detrás
-    const gEdges = document.createElementNS('http://www.w3.org/2000/svg','g'); svg.appendChild(gEdges);
-    const gNodes = document.createElementNS('http://www.w3.org/2000/svg','g'); svg.appendChild(gNodes);
+  // defs (flechas)
+  const defs = document.createElementNS('http://www.w3.org/2000/svg','defs'); svg.appendChild(defs);
+  if(S.view==='circ'){
+    const mk = document.createElementNS('http://www.w3.org/2000/svg','marker');
+    mk.setAttribute('id','arrow'); mk.setAttribute('markerWidth','10'); mk.setAttribute('markerHeight','10');
+    mk.setAttribute('refX','10'); mk.setAttribute('refY','3'); mk.setAttribute('orient','auto');
+    mk.innerHTML = '<path d="M0,0 L10,3 L0,6 Z" fill="#1f2937"/>';
+    defs.appendChild(mk);
+  }
 
-    // Relación: dibujar líneas
-    if(S.view==='rel' && drawEdges){
-      for(let i=0;i<S.nodes.length;i++){
-        for(let j=i+1;j<S.nodes.length;j++){
-          const a = S.nodes[i], b = S.nodes[j];
-          const val = getRel(a.name, b.name);
-          if(!val) continue;
+  // líneas/relaciones o flechas
+  const gEdges = document.createElementNS('http://www.w3.org/2000/svg','g'); svg.appendChild(gEdges);
+  if(S.nodes.length){
+    for(let i=0;i<S.nodes.length;i++){
+      for(let j=i+1;j<S.nodes.length;j++){
+        const a = S.nodes[i], b = S.nodes[j];
+        const val = getRel(a.name, b.name);
+        if(!val) continue;
+        // Relaciones
+        if(S.view==='rel' && drawEdges){
           const line = document.createElementNS('http://www.w3.org/2000/svg','line');
           line.setAttribute('x1', a.x); line.setAttribute('y1', a.y);
           line.setAttribute('x2', b.x); line.setAttribute('y2', b.y);
           line.setAttribute('stroke', '#1f2937');
           line.setAttribute('stroke-width', '1.8');
-          if(val===4) line.setAttribute('stroke-dasharray','6 6'); // deseable
+          if(val===4 && S.relOpts?.showDashed) line.setAttribute('stroke-dasharray','6 6');
+          if(val===8 && !S.relOpts?.showSolid) continue;
+          gEdges.appendChild(line);
+        }
+        // Circulaciones (flechas)
+        if(S.view==='circ'){
+          const line = document.createElementNS('http://www.w3.org/2000/svg','line');
+          line.setAttribute('x1', a.x); line.setAttribute('y1', a.y);
+          line.setAttribute('x2', b.x); line.setAttribute('y2', b.y);
+          line.setAttribute('stroke', '#1f2937');
+          line.setAttribute('stroke-width', '1.8');
+          line.setAttribute('marker-end','url(#arrow)');
+          const k = keyAB(a.name,b.name);
+          const pct = S.flowPct[k];
+          if(pct!=null){
+            const mx = (a.x+b.x)/2, my = (a.y+b.y)/2;
+            const lbl = document.createElementNS('http://www.w3.org/2000/svg','text');
+            lbl.setAttribute('x', mx+6); lbl.setAttribute('y', my-6);
+            lbl.setAttribute('fill', '#1f2937'); lbl.setAttribute('font-size','12');
+            lbl.textContent = pct + '%';
+            gEdges.appendChild(lbl);
+          }
+          line.addEventListener('click', ()=>{
+            const v = prompt('Porcentaje de flujo (0-100):', (S.flowPct?.[k] ?? ''));
+            if(v==null) return;
+            const n = Math.max(0, Math.min(100, Number(v)||0));
+            S.flowPct[k]=n;
+            drawBoard(drawEdges);
+          });
           gEdges.appendChild(line);
         }
       }
     }
+  }
 
-    // Dibujar nodos
-    S.nodes.forEach(n=>{
-      const g = document.createElementNS('http://www.w3.org/2000/svg','g');
-      g.classList.add('node'); g.dataset.zone = n.zone || 'social';
-      g.setAttribute('transform', `translate(${n.x},${n.y})`);
-      // circulito de 16px
-      const c = document.createElementNS('http://www.w3.org/2000/svg','circle');
-      c.setAttribute('r','16');
-      const t = document.createElementNS('http://www.w3.org/2000/svg','text');
-      t.setAttribute('text-anchor','middle'); t.setAttribute('dy','.35em');
-      t.textContent = n.name;
-      g.appendChild(c); g.appendChild(t); gNodes.appendChild(g);
+  // nodos
+  const gNodes = document.createElementNS('http://www.w3.org/2000/svg','g'); svg.appendChild(gNodes);
+  S.nodes.forEach(n=>{
+    const g = document.createElementNS('http://www.w3.org/2000/svg','g');
+    g.classList.add('node'); g.dataset.zone = n.zone || 'social';
+    g.setAttribute('transform', \`translate(\${n.x},\${n.y})\`);
+
+    let mainShape;
+    if(n.rx && n.ry){
+      mainShape = document.createElementNS('http://www.w3.org/2000/svg','ellipse');
+      mainShape.setAttribute('rx', n.rx); mainShape.setAttribute('ry', n.ry);
+      mainShape.setAttribute('fill', '#f0f9ff'); mainShape.setAttribute('stroke','#2563eb'); mainShape.setAttribute('stroke-width','1.5');
+    }else{
+      mainShape = document.createElementNS('http://www.w3.org/2000/svg','circle');
+      mainShape.setAttribute('r','16');
+    }
+    g.appendChild(mainShape);
+
+    const t = document.createElementNS('http://www.w3.org/2000/svg','text');
+    t.setAttribute('text-anchor','middle'); t.setAttribute('dy','.35em'); t.textContent = n.name;
+    g.appendChild(t);
+
+    // drag: radial en matriz/rel/circ; libre en burb/bloq/ent
+    let dragging=false;
+    g.addEventListener('mousedown', ()=>{ dragging=true; g.classList.add('dragging'); });
+    svg.addEventListener('mouseup', ()=>{ dragging=false; g.classList.remove('dragging'); });
+    svg.addEventListener('mouseleave', ()=>{ dragging=false; g.classList.remove('dragging'); });
+    svg.addEventListener('mousemove', (e)=>{
+      if(!dragging || n.lock) return;
+      const p = svg.getBoundingClientRect();
+      const x = e.clientX - p.left, y = e.clientY - p.top;
+      if(['matriz','rel','circ'].includes(S.view)){
+        const ang = Math.atan2(y-cy, x-cx);
+        n.x = cx + (n.ring||16) * Math.cos(ang);
+        n.y = cy + (n.ring||16) * Math.sin(ang);
+      }else{
+        n.x = x; n.y = y;
+      }
+      drawBoard(drawEdges);
+    });
+
+    gNodes.appendChild(g);
+  });
+
+  // textos libres / símbolos
+  if(S.freeText.length){
+    const gT = document.createElementNS('http://www.w3.org/2000/svg','g'); svg.appendChild(gT);
+    S.freeText.forEach(item=>{
+      const tt = document.createElementNS('http://www.w3.org/2000/svg','text');
+      tt.setAttribute('x', item.x); tt.setAttribute('y', item.y);
+      tt.setAttribute('fill', item.fill || '#111'); tt.setAttribute('font-size','14');
+      tt.setAttribute('text-anchor','middle'); tt.textContent = item.txt;
+      // drag de texto
+      let dragging=false, off=[0,0];
+      tt.addEventListener('mousedown', (e)=>{ dragging=true; const bb = tt.getBBox(); off=[e.clientX-bb.x, e.clientY-bb.y]; });
+      svg.addEventListener('mouseup', ()=> dragging=false);
+      svg.addEventListener('mousemove', (e)=>{
+        if(!dragging) return;
+        const p = svg.getBoundingClientRect();
+        item.x = e.clientX - p.left - off[0]; item.y = e.clientY - p.top - off[1];
+        tt.setAttribute('x', item.x); tt.setAttribute('y', item.y);
+      });
+      gT.appendChild(tt);
     });
   }
 }
