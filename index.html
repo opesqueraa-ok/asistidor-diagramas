@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Diag-Assist v1.1.2 — Matriz • Relaciones • Preponderancia</title>
-<meta name="x-version" content="1.1.2"/>
+<title>Diag-Assist v1.3 — Matriz • Relaciones • Preponderancia</title>
+<meta name="x-version" content="1.3"/>
 <style>
   :root{
     --bg:#ffffff; --panel:#f7f7fb; --text:#1a2230; --muted:#687387; --accent:#2563eb;
@@ -21,6 +21,7 @@
   .tabbtn{padding:8px 12px;border:1px solid var(--border);border-radius:10px;background:#fff;cursor:pointer}
   .tabbtn.active{background:var(--accent);border-color:var(--accent);color:#fff}
   .cols{display:grid;grid-template-columns: 360px 1fr; gap:14px}
+  .cols.stack{grid-template-columns: 1fr}
   .card{background:#fff;border:1px solid var(--border);border-radius:14px;padding:12px}
   .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
   input,button,select,textarea{border:1px solid var(--border);border-radius:10px;padding:8px 10px;background:#fff;color:#000}
@@ -31,6 +32,8 @@
   th.sticky{position:sticky;top:0;background:#fff;z-index:1}
   td.lock{background:#f3f4f8;color:#9aa3b2}
   .hint{font-size:12px;color:var(--muted)}
+  .compact table{font-size:12px}
+  .compact th,.compact td{padding:5px}
   /* Whiteboard con retícula de puntos */
   #boardWrap{position:relative;height:640px;border:1px solid var(--border);border-radius:14px;overflow:hidden;background:
     radial-gradient(var(--grid-dot) 1px, transparent 1px) 0 0/10px 10px #fff;}
@@ -38,16 +41,16 @@
   /* nodos (burbujas) */
   .node text{font-size:12px;pointer-events:none; fill:#000}
   .node circle{fill:#f0f9ff;stroke:#2563eb;stroke-width:1.5}
-  .node[data-zone="privada"] circle{fill:#eef6ff;stroke:#a855f7}
-  .node[data-zone="servicio"] circle{fill:#fff7ed;stroke:#f59e0b}
+  .node.privada circle{fill:#eef6ff;stroke:#a855f7}
+  .node.servicio circle{fill:#fff7ed;stroke:#f59e0b}
   .legend{display:flex;gap:10px;align-items:center;font-size:12px;margin-top:6px}
   .legend .chip{display:inline-flex;gap:6px;align-items:center;border:1px solid var(--border);background:var(--chip);border-radius:999px;padding:4px 8px}
-  .dash{stroke-dasharray:6 6}
   .toolbar{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}
   .hiddenRings { opacity:.15; transition:opacity .2s ease; }
-  .node.dragging circle{ stroke:#111; stroke-width:2.2 }
+  .node.dragging circle,.node.dragging ellipse,.node.dragging rect{ stroke:#111; stroke-width:2.2 }
   .badge{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--border);background:#fff;border-radius:999px;padding:4px 10px;font-size:12px;color:#000}
   #errBox{position:fixed;left:12px;bottom:12px;background:#fee2e2;color:#991b1b;border:1px solid #fecaca;padding:8px 12px;border-radius:10px;font-size:12px;display:none;z-index:99}
+  .colorPick{width:34px;height:34px;padding:0;border-radius:8px}
 </style>
 </head>
 <body>
@@ -55,11 +58,11 @@
   <div class="wrap">
     <div class="row" style="justify-content:space-between;align-items:flex-start">
       <div>
-        <h1>Diag‑Assist <span class="badge" id="versionBadge">v1.1.2</span></h1>
-        <div class="sub">Matriz 8/4/0 → Preponderancia (anillos) → Relaciones. Basado en la guía de diagramación.</div>
+        <h1>Diag‑Assist <span class="badge" id="versionBadge">v1.3</span></h1>
+        <div class="sub">Matriz 8/4/0 → Preponderancia (anillos) → Relaciones → Circulaciones → Burbujas/Bloques → Entorno.</div>
       </div>
       <div class="row">
-        <button id="forceReload" title="Recargar forzando caché">Recargar v1.1.2</button>
+        <button id="forceReload" title="Recargar forzando caché">Recargar v1.3</button>
       </div>
     </div>
     <div class="tabs">
@@ -76,7 +79,7 @@
 <div id="errBox"></div>
 
 <main class="wrap">
-  <div class="cols">
+  <div class="cols" id="cols">
     <!-- Panel izquierdo: controles -->
     <section class="card" id="leftPanel">
       <!-- ====== MATRIZ ====== -->
@@ -89,6 +92,7 @@
           <button id="btnInsertTable">Insertar tabla</button>
           <button id="btnApplyPresets">Aplicar predeterminadas</button>
           <button id="btnClearMatrix">Limpiar matriz</button>
+          <button id="btnConfigPredets">Configurar predets personalizadas</button>
         </div>
         <div class="hint">Clic en una celda para ciclar 0 → 4 → 8 (diagonal bloqueada y simetría automática). Las sumas de fila/columna deben coincidir.</div>
         <div class="space"></div>
@@ -104,6 +108,8 @@
           <button id="zSocial">Social</button>
           <button id="zPrivada">Privada</button>
           <button id="zServicio">Servicio</button>
+          <input type="color" id="customColor" class="colorPick" title="Color personalizado (Burbujas/Bloques)"/>
+          <button id="btnDeleteNode" title="Eliminar burbuja/bloque seleccionado">Eliminar</button>
         </div>
         <div class="legend">
           <span class="chip"><svg width="14" height="14"><circle cx="7" cy="7" r="6" fill="#eef6ff" stroke="#a855f7"/></svg> Zona privada</span>
@@ -132,7 +138,7 @@
           <button id="btnToArrows">Convertir relaciones en flechas</button>
           <button id="btnAddText">Añadir cuadro de texto</button>
         </div>
-        <div class="hint">Clic en una flecha para anotar % (en Flujos ajustaremos grosores por %). Los vestíbulos los puedes agregar como “VEST” en Burbujas.</div>
+        <div class="hint">Clic en una flecha para anotar % (etiqueta centrada y paralela a la flecha).</div>
       </div>
 
       <!-- ====== BURBUJAS ====== -->
@@ -143,17 +149,17 @@
           <button id="btnAddWindow">Añadir ventana (V)</button>
           <button id="btnAddVest">Añadir VEST (óvalo)</button>
         </div>
-        <div class="hint">Asignar m² cambia el tamaño (proporcional). Arrastra la “V” y el “VEST” donde convenga.</div>
+        <div class="hint">Asignar m² cambia el tamaño (proporcional). La “V” y “VEST” se arrastran como símbolos.</div>
       </div>
 
       <!-- ====== BLOQUES ====== -->
       <div class="tab tab-bloq" style="display:none">
         <h3>Diagrama de Bloques</h3>
         <div class="toolbar">
-          <button id="btnAddRect">Añadir bloque (rectángulo, m²)</button>
-          <button id="btnAddCirc">Añadir bloque (círculo, m²)</button>
+          <button id="btnAddRect">Añadir bloque (rectángulo b×h m)</button>
+          <button id="btnAddCirc">Añadir bloque (círculo por área m²)</button>
         </div>
-        <div class="hint">Se dimensionan proporcionalmente al área (aprox.).</div>
+        <div class="hint">Rectángulos por <b>base×altura</b> a la <b>misma escala</b> que Burbujas. Puedes recolorearlos.</div>
       </div>
 
       <!-- ====== ENTORNO ====== -->
@@ -169,7 +175,7 @@
           <button id="btnAmbientLayer">Capa ambiental</button>
           <button id="btnEntText">Texto</button>
         </div>
-        <div class="hint">Todos los símbolos son arrastrables.</div>
+        <div class="hint">Se generan como <b>grupos arrastrables</b> (icono + texto).</div>
       </div>
     </section>
 
@@ -183,7 +189,6 @@
 </main>
 
 <script>
-/* ===== Helper de errores visibles ===== */
 function showErr(e){
   try{ console.error(e); }catch{}
   const b = document.getElementById('errBox');
@@ -193,8 +198,7 @@ function showErr(e){
   setTimeout(()=> b.style.display='none', 8000);
 }
 try{
-/* ===== Versión visible y recarga forzada ===== */
-const VERSION = '1.1.2';
+const VERSION = '1.3';
 document.getElementById('versionBadge').textContent = 'v'+VERSION;
 document.getElementById('forceReload').addEventListener('click', ()=>{
   const url = new URL(window.location.href);
@@ -202,33 +206,21 @@ document.getElementById('forceReload').addEventListener('click', ()=>{
   window.location.replace(url.toString());
 });
 
-/* ==========================
-   ESTADO BASE
-========================== */
 const S = {
-  zonas: {},                // nombre -> 'social' | 'privada' | 'servicio'
-  ambientes: [],            // lista ordenada
-  matrix: {},               // "A|B" => 0|4|8  (simétrica)
-  sums: {},                 // nombre -> sumatoria
-  nodes: [],                // [{name,x,y,ring,zone,rx,ry,area}]
-  rings: [],                // [{r,sum}]
-  view: 'matriz',
-  relDraw: false,
+  zonas: {}, ambientes: [], matrix: {}, sums: {}, nodes: [], rings: [],
+  view: 'matriz', relDraw: false,
   relOpts: { hideRings:false, showSolid:true, showDashed:true },
-  flowPct: {},              // keyAB(nameA,nameB) -> porcentaje
-  freeText: [],             // [{x,y,txt,fill}]
-  ambientLayer: false
+  flowPct: {}, freeText: [], symbols: [], ambientLayer: false,
+  customPredets: JSON.parse(localStorage.getItem('CUSTOM_PREDETS')||'[]'),
+  scaleBubble: 42
 };
-const PRESETS = [
+const PRESETS_BASE = [
   ['Cocina','Comedor',8],
   ['Patio de servicio','Cocina',8],
   ['Sala','Comedor',4],
   ['Dorm 1','S.S.',4], ['Dorm 2','S.S.',4]
 ];
 
-/* ==========================
-   UTILIDADES
-========================== */
 const $ = s => document.querySelector(s);
 const el = (t,attrs={}) => Object.assign(document.createElement(t), attrs);
 const keyAB = (a,b) => a < b ? `${a}|${b}` : `${b}|${a}`;
@@ -236,27 +228,17 @@ function setRel(a,b,val){ if(a===b) return; S.matrix[keyAB(a,b)] = val; }
 function getRel(a,b){ if(a===b) return 0; return S.matrix[keyAB(a,b)] ?? 0; }
 function switchTab(tab){
   document.querySelectorAll('.tabbtn').forEach(x=>x.classList.remove('active'));
-  document.querySelector(`.tabbtn[data-tab="${tab}"]`).classList.add('active');
+  document.querySelector(\`.tabbtn[data-tab="\${tab}"]\`).classList.add('active');
   document.querySelectorAll('.tab').forEach(x=>x.style.display='none');
-  document.querySelector(`.tab-${tab}`).style.display='';
+  document.querySelector(\`.tab-\${tab}\`).style.display='';
   S.view = tab; drawBoard(S.view==='rel' && S.relDraw);
 }
-function normalizeKey(s){
-  return s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
-}
+function normalizeKey(s){ return s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim(); }
+function deg(a){ return a*180/Math.PI; }
 
-/* ==========================
-   TABS
-========================== */
-document.querySelectorAll('.tabbtn').forEach(btn=>{
-  btn.addEventListener('click', ()=> switchTab(btn.dataset.tab));
-});
+document.querySelectorAll('.tabbtn').forEach(btn=> btn.addEventListener('click', ()=> switchTab(btn.dataset.tab)));
 
-/* ==========================
-   MATRIZ: CREAR Y RELLENAR
-========================== */
-document.body.insertAdjacentHTML('afterbegin', '<!-- v1.1.2 build -->');
-
+/* MATRIZ */
 document.querySelector('#btnInsertTable').addEventListener('click', ()=>{
   const txt = document.querySelector('#ambientesInput').value.trim();
   if(!txt) return alert('Escribe los ambientes separados por coma');
@@ -274,30 +256,39 @@ document.querySelector('#btnInsertTable').addEventListener('click', ()=>{
       setRel(S.ambientes[i], S.ambientes[j], 0);
     }
   }
-  renderMatrix();
-  drawBoard();
+  renderMatrix(); drawBoard();
 });
-
 document.querySelector('#btnClearMatrix').addEventListener('click', ()=>{
   Object.keys(S.matrix).forEach(k=> S.matrix[k]=0);
-  renderMatrix();
-  drawBoard();
+  renderMatrix(); drawBoard();
 });
-
 document.querySelector('#btnApplyPresets').addEventListener('click', ()=>{
-  const map = {};
-  S.ambientes.forEach(n=> map[normalizeKey(n)] = n);
-  PRESETS.forEach(([a,b,val])=>{
+  const map = {}; S.ambientes.forEach(n=> map[normalizeKey(n)] = n);
+  [...PRESETS_BASE, ...S.customPredets].forEach(([a,b,val])=>{
     const A = map[normalizeKey(a)], B = map[normalizeKey(b)];
     if(A && B) setRel(A,B,val);
   });
   renderMatrix();
+});
+document.querySelector('#btnConfigPredets').addEventListener('click', ()=>{
+  const txt = prompt('Agregar predeterminada (formato: Ambiente A, Ambiente B, 4|8):'); if(!txt) return;
+  const parts = txt.split(',').map(s=>s.trim());
+  if(parts.length<3) return alert('Formato inválido. Ej: Cocina, Comedor, 8');
+  const a = parts[0], b = parts[1], val = Number(parts[2]);
+  if(!(val===4||val===8)) return alert('Valor debe ser 4 u 8');
+  S.customPredets.push([a,b,val]);
+  localStorage.setItem('CUSTOM_PREDETS', JSON.stringify(S.customPredets));
+  alert('Guardado. Usa “Aplicar predeterminadas”.');
 });
 
 function renderMatrix(){
   const host = document.querySelector('#matrixHost');
   host.innerHTML = '';
   if(S.ambientes.length===0){ host.innerHTML = '<div class="hint">Primero inserta la lista de ambientes.</div>'; return; }
+  const cols = document.getElementById('cols');
+  if(S.ambientes.length>12){ host.classList.add('compact'); cols.classList.add('stack'); }
+  else { host.classList.remove('compact'); cols.classList.remove('stack'); }
+
   const tbl = el('table');
   const thead = el('thead');
   const hr = el('tr'); hr.append(el('th',{textContent:'—',className:'sticky'}));
@@ -334,8 +325,7 @@ function renderMatrix(){
   trS.append(el('th',{textContent:'Σ col'}));
   let ok = true;
   S.ambientes.forEach((b,j)=>{
-    let s=0;
-    S.ambientes.forEach((a,i)=>{ if(i!==j) s += getRel(a,b); });
+    let s=0; S.ambientes.forEach((a,i)=>{ if(i!==j) s += getRel(a,b); });
     if(s!==S.sums[b]) ok=false;
     trS.append(el('td',{textContent:s}));
   });
@@ -345,13 +335,10 @@ function renderMatrix(){
   host.append(tbl);
 }
 
-/* ===== Preponderancia ===== */
+/* ANILLOS / PREPONDERANCIA */
 function computeRings(){
   S.sums = {};
-  S.ambientes.forEach(a=>{
-    let s=0; S.ambientes.forEach(b=>{ if(a!==b) s += getRel(a,b); });
-    S.sums[a]=s;
-  });
+  S.ambientes.forEach(a=>{ let s=0; S.ambientes.forEach(b=>{ if(a!==b) s += getRel(a,b); }); S.sums[a]=s; });
   const uniq = [...new Set(Object.values(S.sums))].sort((a,b)=>b-a);
   const svg = document.querySelector('#boardSVG');
   const W = svg.parentElement.clientWidth, H = svg.parentElement.clientHeight;
@@ -361,9 +348,7 @@ function computeRings(){
 }
 document.querySelector('#btnPreponderancia').addEventListener('click', ()=>{
   if(S.ambientes.length===0) return alert('Primero crea la matriz.');
-  computeRings();
-  S.nodes = [];
-  drawBoard();
+  computeRings(); S.nodes = []; drawBoard();
 });
 document.querySelector('#btnGenerarAmbientes').addEventListener('click', ()=>{
   if(!S.rings.length){ computeRings(); }
@@ -372,124 +357,153 @@ document.querySelector('#btnGenerarAmbientes').addEventListener('click', ()=>{
   const cx = W/2, cy = H/2;
   S.nodes = [];
   const groups = {};
-  S.ambientes.forEach(n=>{
-    const s = S.sums[n] ?? 0;
-    groups[s] = groups[s] || []; groups[s].push(n);
-  });
+  S.ambientes.forEach(n=>{ const s = S.sums[n] ?? 0; (groups[s] ||= []).push(n); });
   Object.entries(groups).forEach(([sum, list])=>{
     const ring = S.rings.find(r=>r.sum==sum);
     list.forEach((name, idx)=>{
       const angle = (idx / list.length) * Math.PI*2;
       const x = cx + ring.r * Math.cos(angle);
       const y = cy + ring.r * Math.sin(angle);
-      S.nodes.push({name, x, y, ring: ring.r, zone: S.zonas[name]||'social'});
+      S.nodes.push({name, x, y, ring: ring.r, zone: S.zonas[name]||'social', shape:'circle'});
     });
   });
   drawBoard();
 });
 document.querySelector('#btnCopiarARelaciones').addEventListener('click', ()=> switchTab('rel'));
 
-/* ===== Relaciones ===== */
+/* RELACIONES */
 document.querySelector('#btnGenRelaciones').addEventListener('click', ()=>{ S.relDraw=true; switchTab('rel'); });
 document.querySelector('#btnClearRel').addEventListener('click', ()=>{ S.relDraw=false; drawBoard(false); });
 document.querySelector('#chkHideRings').addEventListener('change', e=>{ S.relOpts.hideRings = e.target.checked; drawBoard(S.relDraw); });
 document.querySelector('#chkSolid').addEventListener('change', e=>{ S.relOpts.showSolid = e.target.checked; drawBoard(S.relDraw); });
 document.querySelector('#chkDashed').addEventListener('change', e=>{ S.relOpts.showDashed = e.target.checked; drawBoard(S.relDraw); });
 
-/* ===== Circulaciones ===== */
-document.querySelector('#btnToArrows').addEventListener('click', ()=>{ switchTab('circ'); });
+/* CIRCULACIONES */
+document.querySelector('#btnToArrows').addEventListener('click', ()=> switchTab('circ'));
 document.querySelector('#btnAddText').addEventListener('click', ()=>{
   const txt = prompt('Texto:'); if(!txt) return;
   const svg = document.querySelector('#boardSVG'); const W = svg.clientWidth, H = svg.clientHeight;
   const x = W/2, y = 30 + Math.random()*60;
-  S.freeText.push({x,y,txt,fill:'#111'});
+  S.freeText.push({x,y,txt,fill:'#111',rot:0});
   drawBoard(S.relDraw);
 });
 
-/* ===== Burbujas ===== */
+/* BURBUJAS */
 document.querySelector('#btnToOvals').addEventListener('click', ()=>{
   if(!S.nodes.length) return alert('Genera primero las burbujas.');
   let maxA=0; const areas={};
   S.nodes.forEach(n=>{
-    const v = prompt(`Área en m² para "${n.name}":`, n.area||'');
+    const v = prompt(\`Área en m² para "\${n.name}":\`, n.area||'');
     if(v==null) return;
     const a = Math.max(1, Number(v)||1); areas[n.name]=a; if(a>maxA) maxA=a;
   });
-  const maxR = 42;
+  const maxR = S.scaleBubble;
   const k = maxR / Math.sqrt(maxA||1);
   S.nodes.forEach(n=>{
     const a = areas[n.name] || 1; n.area=a;
     const base = Math.sqrt(a)*k;
-    n.rx = base * 1.2; n.ry = base * 0.9;
+    n.rx = base * 1.2; n.ry = base * 0.9; n.shape='ellipse';
   });
   switchTab('burb');
 });
 document.querySelector('#btnAddWindow').addEventListener('click', ()=>{
   const svg = document.querySelector('#boardSVG'); const W = svg.clientWidth, H = svg.clientHeight;
   const x = W/2 + (Math.random()*60-30), y = H/2 + (Math.random()*60-30);
-  S.freeText.push({x,y,txt:'V',fill:'#111'});
+  S.freeText.push({x,y,txt:'V',fill:'#111',rot:0});
   drawBoard();
 });
 document.querySelector('#btnAddVest').addEventListener('click', ()=>{
   const svg = document.querySelector('#boardSVG'); const W = svg.clientWidth, H = svg.clientHeight;
   const x = W/2, y = H/2;
-  S.nodes.push({name:'VEST', x, y, rx:26, ry:18, lock:false, zone:'servicio'});
+  S.nodes.push({name:'VEST', x, y, rx:26, ry:18, lock:false, zone:'servicio', shape:'ellipse'});
   switchTab('burb');
 });
 
-/* ===== Bloques ===== */
-function addBlock(kind){
+/* BLOQUES */
+function addBlockRect(){
+  const name = prompt('Nombre del bloque:'); if(!name) return;
+  const base = Number(prompt('Base (m):','4'))||4;
+  const alto = Number(prompt('Altura (m):','3'))||3;
+  const m2px = 10;
+  const w = Math.max(20, base*m2px);
+  const h = Math.max(20, alto*m2px);
+  const svg = document.querySelector('#boardSVG'); const W = svg.clientWidth, H = svg.clientHeight;
+  const x = W/2 + (Math.random()*80-40), y = H/2 + (Math.random()*80-40);
+  S.nodes.push({name, x, y, w, h, shape:'rect', zone:'social', fill:'#f0f9ff'});
+  switchTab('bloq');
+}
+function addBlockCirc(){
   const name = prompt('Nombre del bloque:'); if(!name) return;
   const a = Number(prompt('Área m²:','20'))||20;
   const svg = document.querySelector('#boardSVG'); const W = svg.clientWidth, H = svg.clientHeight;
   const x = W/2 + (Math.random()*80-40), y = H/2 + (Math.random()*80-40);
-  const scale = 6;
-  const base = Math.sqrt(a)*scale;
-  if(kind==='rect'){
-    S.nodes.push({name: `${name} ${a} m²`, x, y, rx: base*1.2, ry: base*0.8, lock:false, zone:'social'});
-  }else{
-    S.nodes.push({name: `${name} ${a} m²`, x, y, rx: base, ry: base, lock:false, zone:'social'});
-  }
+  const scale = 6; const r = Math.sqrt(a)*scale;
+  S.nodes.push({name: \`\${name} \${a} m²\`, x, y, rx:r, ry:r, shape:'ellipse', zone:'social', fill:'#f0f9ff'});
   switchTab('bloq');
 }
-document.querySelector('#btnAddRect').addEventListener('click', ()=> addBlock('rect'));
-document.querySelector('#btnAddCirc').addEventListener('click', ()=> addBlock('circ'));
+document.querySelector('#btnAddRect').addEventListener('click', addBlockRect);
+document.querySelector('#btnAddCirc').addEventListener('click', addBlockCirc);
 
-/* ===== Entorno ===== */
-document.querySelectorAll('.symBtn').forEach(b=>{
-  b.addEventListener('click', ()=>{
-    const label = b.getAttribute('data-sym');
-    const svg = document.querySelector('#boardSVG'); const W = svg.clientWidth, H = svg.clientHeight;
-    const x = 30 + Math.random()*80, y = 40 + Math.random()*80;
-    S.freeText.push({x,y,txt:label,fill:'#094'});
-    switchTab('ent');
-  });
-});
+/* ENTORNO */
+function addSymbol(type,label){
+  const svg = document.querySelector('#boardSVG'); const W = svg.clientWidth, H = svg.clientHeight;
+  const x = 30 + Math.random()*80, y = 40 + Math.random()*80;
+  S.symbols.push({x,y,type,label});
+  switchTab('ent');
+}
+document.querySelectorAll('.symBtn').forEach(b=> b.addEventListener('click', ()=> addSymbol(b.getAttribute('data-sym'), b.getAttribute('data-sym'))));
 document.querySelector('#btnAmbientLayer').addEventListener('click', ()=>{ S.ambientLayer = !S.ambientLayer; drawBoard(); });
 document.querySelector('#btnEntText').addEventListener('click', ()=>{
   const txt = prompt('Texto:'); if(!txt) return;
   const svg = document.querySelector('#boardSVG'); const x = svg.clientWidth/2, y = svg.clientHeight-20;
-  S.freeText.push({x,y,txt,fill:'#111'});
+  S.freeText.push({x,y,txt,fill:'#111',rot:0});
   drawBoard();
 });
 
-/* ===== Zonas (color) ===== */
+/* Zonas / Color / Eliminar */
 let selectedNode = null;
 document.addEventListener('click', (e)=>{
   const g = e.target.closest('.node');
   if(!g) { selectedNode=null; return; }
-  const label = g.querySelector('text')?.textContent;
+  const label = g.getAttribute('data-name');
   selectedNode = S.nodes.find(n=> n.name===label) || null;
 });
 function setZone(z){
-  if(!selectedNode){ alert('Primero selecciona una burbuja'); return; }
+  if(!selectedNode){ alert('Primero selecciona una burbuja/bloque'); return; }
   selectedNode.zone = z; drawBoard(S.view==='rel' && S.relDraw);
 }
 document.querySelector('#zSocial').addEventListener('click', ()=> setZone('social'));
 document.querySelector('#zPrivada').addEventListener('click', ()=> setZone('privada'));
 document.querySelector('#zServicio').addEventListener('click', ()=> setZone('servicio'));
+document.querySelector('#customColor').addEventListener('input', (e)=>{
+  if(!selectedNode) return alert('Selecciona una burbuja/bloque.');
+  selectedNode.fill = e.target.value; drawBoard(S.view==='rel' && S.relDraw);
+});
+document.querySelector('#btnDeleteNode').addEventListener('click', ()=>{
+  if(!selectedNode) return alert('Selecciona una burbuja/bloque.');
+  S.nodes = S.nodes.filter(n=> n!==selectedNode); selectedNode=null; drawBoard(S.view==='rel' && S.relDraw);
+});
 
-/* ===== Pizarra (SVG) ===== */
+/* Geometría para líneas/flechas */
+function nodeEdgePoint(n, towardX, towardY){
+  const cx = n.x, cy = n.y;
+  const dx = towardX - cx, dy = towardY - cy;
+  const a = Math.atan2(dy, dx);
+  if(n.shape==='ellipse' || (n.rx && n.ry)){
+    const rx = n.rx || 16, ry = n.ry || 16;
+    return { x: cx + rx*Math.cos(a), y: cy + ry*Math.sin(a) };
+  } else if(n.shape==='rect' && n.w && n.h){
+    const hw = n.w/2, hh = n.h/2;
+    const tX = hw/Math.abs(Math.cos(a));
+    const tY = hh/Math.abs(Math.sin(a));
+    const t = Math.min(tX || Infinity, tY || Infinity);
+    return { x: cx + Math.cos(a)*t, y: cy + Math.sin(a)*t };
+  } else {
+    const r = 16; return { x: cx + r*Math.cos(a), y: cy + r*Math.sin(a) };
+  }
+}
+
+/* Pizarra (SVG) */
 function drawBoard(drawEdges=false){
   const svg = document.querySelector('#boardSVG');
   svg.innerHTML = '';
@@ -518,7 +532,7 @@ function drawBoard(drawEdges=false){
       gRings.appendChild(c);
       const t = document.createElementNS('http://www.w3.org/2000/svg','text');
       t.setAttribute('x', cx + r.r + 6); t.setAttribute('y', cy - 6);
-      t.setAttribute('fill', '#5f6b86'); t.textContent = `Σ = ${r.sum}`;
+      t.setAttribute('fill', '#5f6b86'); t.textContent = \`Σ = \${r.sum}\`;
       gRings.appendChild(t);
     });
   }
@@ -526,9 +540,9 @@ function drawBoard(drawEdges=false){
   const defs = document.createElementNS('http://www.w3.org/2000/svg','defs'); svg.appendChild(defs);
   if(S.view==='circ'){
     const mk = document.createElementNS('http://www.w3.org/2000/svg','marker');
-    mk.setAttribute('id','arrow'); mk.setAttribute('markerWidth','10'); mk.setAttribute('markerHeight','10');
-    mk.setAttribute('refX','10'); mk.setAttribute('refY','3'); mk.setAttribute('orient','auto');
-    mk.innerHTML = '<path d="M0,0 L10,3 L0,6 Z" fill="#1f2937"/>';
+    mk.setAttribute('id','arrow'); mk.setAttribute('markerWidth','14'); mk.setAttribute('markerHeight','14');
+    mk.setAttribute('refX','12'); mk.setAttribute('refY','4'); mk.setAttribute('orient','auto');
+    mk.innerHTML = '<path d="M0,0 L12,4 L0,8 Z" fill="#1f2937"/>';
     defs.appendChild(mk);
   }
 
@@ -539,30 +553,37 @@ function drawBoard(drawEdges=false){
         const a = S.nodes[i], b = S.nodes[j];
         const val = getRel(a.name, b.name);
         if(!val) continue;
+
         if(S.view==='rel' && drawEdges){
+          const p1 = {x:a.x, y:a.y}, p2 = {x:b.x, y:b.y};
           const line = document.createElementNS('http://www.w3.org/2000/svg','line');
-          line.setAttribute('x1', a.x); line.setAttribute('y1', a.y);
-          line.setAttribute('x2', b.x); line.setAttribute('y2', b.y);
-          line.setAttribute('stroke', '#1f2937');
-          line.setAttribute('stroke-width', '1.8');
+          line.setAttribute('x1', p1.x); line.setAttribute('y1', p1.y);
+          line.setAttribute('x2', p2.x); line.setAttribute('y2', p2.y);
+          line.setAttribute('stroke', '#1f2937'); line.setAttribute('stroke-width', '1.8');
           if(val===4 && S.relOpts?.showDashed) line.setAttribute('stroke-dasharray','6 6');
           if(val===8 && !S.relOpts?.showSolid) continue;
           gEdges.appendChild(line);
         }
+
         if(S.view==='circ'){
+          const headFrom = nodeEdgePoint(a, b.x, b.y);
+          const headTo   = nodeEdgePoint(b, a.x, a.y);
           const line = document.createElementNS('http://www.w3.org/2000/svg','line');
-          line.setAttribute('x1', a.x); line.setAttribute('y1', a.y);
-          line.setAttribute('x2', b.x); line.setAttribute('y2', b.y);
-          line.setAttribute('stroke', '#1f2937');
-          line.setAttribute('stroke-width', '1.8');
+          line.setAttribute('x1', headFrom.x); line.setAttribute('y1', headFrom.y);
+          line.setAttribute('x2', headTo.x);   line.setAttribute('y2', headTo.y);
+          line.setAttribute('stroke', '#1f2937'); line.setAttribute('stroke-width', '1.8');
           line.setAttribute('marker-end','url(#arrow)');
+
           const k = keyAB(a.name,b.name);
           const pct = S.flowPct[k];
+          const mx = (headFrom.x+headTo.x)/2, my=(headFrom.y+headTo.y)/2;
+          const ang = Math.atan2(headTo.y - headFrom.y, headTo.x - headFrom.x);
           if(pct!=null){
-            const mx = (a.x+b.x)/2, my = (a.y+b.y)/2;
             const lbl = document.createElementNS('http://www.w3.org/2000/svg','text');
-            lbl.setAttribute('x', mx+6); lbl.setAttribute('y', my-6);
+            lbl.setAttribute('x', mx); lbl.setAttribute('y', my);
             lbl.setAttribute('fill', '#1f2937'); lbl.setAttribute('font-size','12');
+            lbl.setAttribute('text-anchor','middle');
+            lbl.setAttribute('transform', \`rotate(\${deg(ang)}, \${mx}, \${my})\`);
             lbl.textContent = pct + '%';
             gEdges.appendChild(lbl);
           }
@@ -570,8 +591,7 @@ function drawBoard(drawEdges=false){
             const v = prompt('Porcentaje de flujo (0-100):', (S.flowPct?.[k] ?? ''));
             if(v==null) return;
             const n = Math.max(0, Math.min(100, Number(v)||0));
-            S.flowPct[k]=n;
-            drawBoard(drawEdges);
+            S.flowPct[k]=n; drawBoard(drawEdges);
           });
           gEdges.appendChild(line);
         }
@@ -582,17 +602,27 @@ function drawBoard(drawEdges=false){
   const gNodes = document.createElementNS('http://www.w3.org/2000/svg','g'); svg.appendChild(gNodes);
   S.nodes.forEach(n=>{
     const g = document.createElementNS('http://www.w3.org/2000/svg','g');
-    g.classList.add('node'); g.dataset.zone = n.zone || 'social';
-    g.setAttribute('transform', `translate(${n.x},${n.y})`);
+    g.classList.add('node'); if(n.zone) g.classList.add(n.zone);
+    g.setAttribute('data-name', n.name);
+    g.setAttribute('transform', \`translate(\${n.x},\${n.y})\`);
 
     let mainShape;
-    if(n.rx && n.ry){
+    if(n.shape==='rect' && n.w && n.h){
+      mainShape = document.createElementNS('http://www.w3.org/2000/svg','rect');
+      mainShape.setAttribute('x', -n.w/2); mainShape.setAttribute('y', -n.h/2);
+      mainShape.setAttribute('width', n.w); mainShape.setAttribute('height', n.h);
+      mainShape.setAttribute('fill', n.fill || '#f0f9ff');
+      mainShape.setAttribute('stroke', '#2563eb'); mainShape.setAttribute('stroke-width','1.5');
+    } else if(n.shape==='ellipse' || (n.rx && n.ry)){
       mainShape = document.createElementNS('http://www.w3.org/2000/svg','ellipse');
       mainShape.setAttribute('rx', n.rx); mainShape.setAttribute('ry', n.ry);
-      mainShape.setAttribute('fill', '#f0f9ff'); mainShape.setAttribute('stroke','#2563eb'); mainShape.setAttribute('stroke-width','1.5');
-    }else{
+      mainShape.setAttribute('fill', n.fill || '#f0f9ff');
+      mainShape.setAttribute('stroke','#2563eb'); mainShape.setAttribute('stroke-width','1.5');
+    } else {
       mainShape = document.createElementNS('http://www.w3.org/2000/svg','circle');
       mainShape.setAttribute('r','16');
+      mainShape.setAttribute('fill', n.fill || '#f0f9ff');
+      mainShape.setAttribute('stroke','#2563eb'); mainShape.setAttribute('stroke-width','1.5');
     }
     g.appendChild(mainShape);
 
@@ -601,14 +631,14 @@ function drawBoard(drawEdges=false){
     g.appendChild(t);
 
     let dragging=false;
-    g.addEventListener('mousedown', ()=>{ dragging=true; g.classList.add('dragging'); });
+    g.addEventListener('mousedown', ()=>{ dragging=true; g.classList.add('dragging'); selectedNode = n; });
     svg.addEventListener('mouseup', ()=>{ dragging=false; g.classList.remove('dragging'); });
     svg.addEventListener('mouseleave', ()=>{ dragging=false; g.classList.remove('dragging'); });
     svg.addEventListener('mousemove', (e)=>{
       if(!dragging || n.lock) return;
       const p = svg.getBoundingClientRect();
       const x = e.clientX - p.left, y = e.clientY - p.top;
-      if(['matriz','rel','circ'].includes(S.view)){
+      if(['matriz','rel','circ'].includes(S.view) && n.ring){
         const ang = Math.atan2(y-cy, x-cx);
         n.x = cx + (n.ring||16) * Math.cos(ang);
         n.y = cy + (n.ring||16) * Math.sin(ang);
@@ -627,7 +657,9 @@ function drawBoard(drawEdges=false){
       const tt = document.createElementNS('http://www.w3.org/2000/svg','text');
       tt.setAttribute('x', item.x); tt.setAttribute('y', item.y);
       tt.setAttribute('fill', item.fill || '#111'); tt.setAttribute('font-size','14');
-      tt.setAttribute('text-anchor','middle'); tt.textContent = item.txt;
+      tt.setAttribute('text-anchor','middle');
+      if(item.rot) tt.setAttribute('transform', \`rotate(\${item.rot}, \${item.x}, \${item.y})\`);
+      tt.textContent = item.txt;
       let dragging=false, off=[0,0];
       tt.addEventListener('mousedown', (e)=>{ dragging=true; const bb = tt.getBBox(); off=[e.clientX-bb.x, e.clientY-bb.y]; });
       svg.addEventListener('mouseup', ()=> dragging=false);
@@ -638,6 +670,51 @@ function drawBoard(drawEdges=false){
         tt.setAttribute('x', item.x); tt.setAttribute('y', item.y);
       });
       gT.appendChild(tt);
+    });
+  }
+
+  if(S.symbols.length){
+    const gS = document.createElementNS('http://www.w3.org/2000/svg','g'); svg.appendChild(gS);
+    S.symbols.forEach(sym=>{
+      const g = document.createElementNS('http://www.w3.org/2000/svg','g');
+      g.setAttribute('transform', \`translate(\${sym.x},\${sym.y})\`);
+      if(sym.type.includes('NORTE')){
+        const arr = document.createElementNS('http://www.w3.org/2000/svg','path');
+        arr.setAttribute('d','M0,-14 L6,0 L-6,0 Z'); arr.setAttribute('fill','#111');
+        g.appendChild(arr);
+      }else if(sym.type.includes('VISTAS')){
+        const eye = document.createElementNS('http://www.w3.org/2000/svg','ellipse');
+        eye.setAttribute('rx',12); eye.setAttribute('ry',7); eye.setAttribute('fill','none'); eye.setAttribute('stroke','#111');
+        const pup = document.createElementNS('http://www.w3.org/2000/svg','circle'); pup.setAttribute('r',3); pup.setAttribute('fill','#111');
+        g.appendChild(eye); g.appendChild(pup);
+      }else if(sym.type.includes('VIENTOS')){
+        const arc = document.createElementNS('http://www.w3.org/2000/svg','path');
+        arc.setAttribute('d','M-14,0 Q0,-10 14,0'); arc.setAttribute('fill','none'); arc.setAttribute('stroke','#111');
+        g.appendChild(arc);
+      }else if(sym.type.includes('SOL')){
+        const sun = document.createElementNS('http://www.w3.org/2000/svg','circle'); sun.setAttribute('r',6); sun.setAttribute('fill','#f59e0b');
+        g.appendChild(sun);
+      }else if(sym.type.includes('PENDIENTE')){
+        const tri = document.createElementNS('http://www.w3.org/2000/svg','path');
+        tri.setAttribute('d','M-10,8 L10,8 L10,-8 Z'); tri.setAttribute('fill','#94a3b8');
+        g.appendChild(tri);
+      }
+      const t = document.createElementNS('http://www.w3.org/2000/svg','text');
+      t.setAttribute('x', 0); t.setAttribute('y', 18); t.setAttribute('fill','#111');
+      t.setAttribute('text-anchor','middle'); t.setAttribute('font-size','12'); t.textContent = sym.label;
+      g.appendChild(t);
+
+      let dragging=false, off=[0,0];
+      g.addEventListener('mousedown', (e)=>{ dragging=true; const bb = g.getBBox(); off=[e.clientX-bb.x, e.clientY-bb.y]; });
+      svg.addEventListener('mouseup', ()=> dragging=false);
+      svg.addEventListener('mousemove', (e)=>{
+        if(!dragging) return;
+        const p = svg.getBoundingClientRect();
+        sym.x = e.clientX - p.left - off[0]; sym.y = e.clientY - p.top - off[1];
+        g.setAttribute('transform', \`translate(\${sym.x},\${sym.y})\`);
+      });
+
+      gS.appendChild(g);
     });
   }
 }
