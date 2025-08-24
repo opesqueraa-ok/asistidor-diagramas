@@ -15,12 +15,14 @@
   html,body{height:100%}
   body{margin:0;background:var(--bg);color:var(--text);font:15px/1.5 system-ui,Segoe UI,Roboto,Inter,Arial}
   header{position:sticky;top:0;z-index:5;background:linear-gradient(#fff,rgba(255,255,255,.85));border-bottom:1px solid var(--border)}
-  .wrap{max-width:1180px;margin:0 auto;padding:10px 14px}
+  .wrap{max-width:1400px;margin:0 auto;padding:10px 14px}
   h1{margin:0 0 2px;font-size:18px} .sub{color:var(--muted);font-size:12px}
   .tabs{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
   .tabbtn{padding:8px 12px;border:1px solid var(--border);border-radius:10px;background:#fff;cursor:pointer}
   .tabbtn.active{background:var(--accent);border-color:var(--accent);color:#fff}
-  .cols{display:grid;grid-template-columns: 360px 1fr; gap:14px}
+  .cols{display:flex; flex-direction:column; gap:14px}
+  /* permite scroll horizontal si la tabla crece */
+  #matrixHost{overflow:auto}
   @media (max-width: 1000px){
     .cols{grid-template-columns:1fr}
   }
