@@ -3,14 +3,14 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Diag-Assist v1.7.2-fix — Matriz • Relaciones • Preponderancia</title>
-<meta name="x-version" content="1.7.2-fix"/>
+<title>Diag-Assist v1.7.3 — Matriz • Relaciones • Preponderancia</title>
+<meta name="x-version" content="1.7.3"/>
 <style>
   :root{
     --bg:#ffffff; --panel:#f7f7fb; --text:#1a2230; --muted:#687387; --accent:#2563eb;
     --border:#d8dbe6; --chip:#eef1f7; --ok:#16a34a; --warn:#f59e0b; --err:#ef4444;
     --grid-dot:#e6e9f2;
-    /* v1.7.2: zebra más visible (ajusta aquí si quieres otro tono) */
+    /* Zebra más visible (ajusta si quieres otro tono) */
     --rowAlt:#eef1f7;   /* sugerido más oscuro: #e2e8f0 */
     --colAlt:#e8edf7;   /* sugerido más oscuro: #dbe3f1 */
   }
@@ -42,13 +42,8 @@
   #boardSVG{position:absolute;inset:0}
   /* nodos (burbujas) */
   .node text{font-size:12px;pointer-events:none; fill:#000}
-  .node circle{fill:#f0f9ff;stroke:#2563eb;stroke-width:1.5}
-  .node[data-zone="privada"] circle{fill:#eef6ff;stroke:#a855f7}
-  .node[data-zone="semi"] circle{fill:#f3f5ff;stroke:#64748b}
-  .node[data-zone="servicio"] circle{fill:#fff7ed;stroke:#f59e0b}
   .legend{display:flex;gap:10px;align-items:center;font-size:12px;margin-top:6px;flex-wrap:wrap}
   .legend .chip{display:inline-flex;gap:6px;align-items:center;border:1px solid var(--border);background:var(--chip);border-radius:999px;padding:4px 8px}
-  .dash{stroke-dasharray:6 6}
   .toolbar{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}
   .hiddenRings { opacity:.15; transition:opacity .2s ease; }
   .node.dragging circle{ stroke:#111; stroke-width:2.2 }
@@ -59,6 +54,8 @@
   .compact th,.compact td{padding:5px}
   .mini{font-size:12px}
   .cfgbtn{padding:4px 6px;border-radius:8px}
+  .chipbtn{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--border);background:#fff;border-radius:999px;padding:6px 10px;cursor:pointer}
+  .dot{width:12px;height:12px;border-radius:50%;border:1px solid #0002;display:inline-block}
 </style>
 </head>
 <body data-js="ready">
@@ -66,11 +63,11 @@
   <div class="wrap">
     <div class="row" style="justify-content:space-between;align-items:flex-start">
       <div>
-        <h1>Diag-Assist <span class="badge" id="versionBadge">v1.7.2-fix</span></h1>
+        <h1>Diag-Assist <span class="badge" id="versionBadge">v1.7.3</span></h1>
         <div class="sub">Matriz 8/4/0 → Preponderancia (anillos) → Relaciones. Basado en la guía de diagramación.</div>
       </div>
       <div class="row">
-        <button id="forceReload" title="Recargar forzando caché">Recargar v1.7.2-fix</button>
+        <button id="forceReload" title="Recargar forzando caché">Recargar v1.7.3</button>
       </div>
     </div>
     <div class="tabs">
@@ -115,7 +112,6 @@
         <div class="space"></div>
         <div id="matrixHost"></div>
 
-        <!-- 🔧 BOTONES QUE FALTABAN: anillos / generar / copiar -->
         <div class="space"></div>
         <div class="toolbar">
           <button id="btnPreponderancia">Calcular anillos (Σ)</button>
@@ -139,7 +135,10 @@
             <button id="zServicio">Servicio</button><button id="cfgServicio" class="cfgbtn" title="Cambiar color por defecto de Servicio">⚙</button>
           </span>
           <button id="zCustom">Otro… (nombre + color)</button>
+          <!-- Aquí aparecerán los personalizados -->
+          <span id="customZonesHost" style="display:flex;gap:6px;flex-wrap:wrap;"></span>
         </div>
+
         <div class="legend">
           <span class="chip" id="chipPriv"><svg width="14" height="14"><circle cx="7" cy="7" r="6"/></svg> Privada</span>
           <span class="chip" id="chipSemi"><svg width="14" height="14"><circle cx="7" cy="7" r="6"/></svg> Semi-Privado</span>
@@ -180,7 +179,6 @@
           <button id="btnToOvals">Convertir burbujas a óvalos (m²)</button>
           <button id="btnAddWindow">Añadir ventana (V)</button>
           <button id="btnAddVest">Añadir VEST (óvalo)</button>
-          <!-- 🔧 BOTÓN QUE FALTABA: eliminar burbuja -->
           <button id="btnDelBubble" title="Elimina la burbuja seleccionada">Eliminar burbuja</button>
         </div>
         <div class="hint">Asignar m² cambia el tamaño (proporcional). Arrastra la “V” y el “VEST”.</div>
@@ -234,7 +232,7 @@ function showErr(e){
 
 (function(){
   try{
-    var VERSION = '1.7.2-fix';
+    var VERSION = '1.7.3';
 
     // Recarga anti-caché
     var reloadBtn = document.getElementById('forceReload');
@@ -261,10 +259,11 @@ function showErr(e){
       flowDir: {},      // dirección por par: +1 (A→B) o -1 (B→A)
       freeText: [],
       ambientLayer: false,
-      symbols: [] // entorno
+      symbols: [],      // entorno
+      customZones: []   // [{name,colorName,fill,stroke}]
     };
 
-    // ====== Paleta de colores preestablecida ======
+    // ===== Paletas / persistencia =====
     var ZONE_COLORS = {
       'Rojo':     {fill:'#fee2e2', stroke:'#ef4444'},
       'Azul':     {fill:'#e0f2fe', stroke:'#2563eb'},
@@ -276,11 +275,13 @@ function showErr(e){
       'Café':     {fill:'#ede3d7', stroke:'#7b5e57'},
       'Naranja':  {fill:'#ffedd5', stroke:'#ea580c'}
     };
-    var LS_ZONE_STYLE = 'diagassist.zoneStyles.v1';
-    var zoneStyle = loadZoneStyle() || {social:'Azul', semi:'Gris', privada:'Morado', servicio:'Naranja'};
+    var LS_ZONE_STYLE   = 'diagassist.zoneStyles.v1';
+    var LS_CUSTOM_ZONES = 'diagassist.userCustomZones.v1';
+    var zoneStyle = loadJSON(LS_ZONE_STYLE) || {social:'Azul', semi:'Gris', privada:'Morado', servicio:'Naranja'};
+    S.customZones = loadJSON(LS_CUSTOM_ZONES) || [];
 
-    function loadZoneStyle(){ try{ return JSON.parse(localStorage.getItem(LS_ZONE_STYLE)||''); }catch(_){ return null; } }
-    function saveZoneStyle(){ try{ localStorage.setItem(LS_ZONE_STYLE, JSON.stringify(zoneStyle)); }catch(_){} }
+    function loadJSON(key){ try{ return JSON.parse(localStorage.getItem(key)||''); }catch(_){ return null; } }
+    function saveJSON(key,val){ try{ localStorage.setItem(key, JSON.stringify(val)); }catch(_){} }
 
     function applyChipColors(){
       var chips = [
@@ -296,6 +297,7 @@ function showErr(e){
         var circle = chip && chip.querySelector('circle');
         if(circle){ circle.setAttribute('fill', col.fill); circle.setAttribute('stroke', col.stroke); }
       });
+      renderCustomZoneChips();
     }
 
     function pickColorName(defaultName){
@@ -307,7 +309,7 @@ function showErr(e){
       return found || null;
     }
 
-    // Utilidades
+    // ====== Utilidades ======
     var $ = function(s){ return document.querySelector(s); };
     var el = function(t, attrs){ var x = document.createElement(t); if(attrs) Object.assign(x, attrs); return x; };
     var keyAB = function(a,b){ return a<b ? (a+'|'+b) : (b+'|'+a); };
@@ -315,7 +317,7 @@ function showErr(e){
     function getRel(a,b){ if(a===b) return 0; return S.matrix[keyAB(a,b)] != null ? S.matrix[keyAB(a,b)] : 0; }
     function normalizeKey(s){ return (s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim(); }
 
-    // Tabs
+    // ===== Tabs =====
     document.querySelectorAll('.tabbtn').forEach(function(btn){
       btn.addEventListener('click', function(){ switchTab(btn.dataset.tab); });
     });
@@ -327,7 +329,7 @@ function showErr(e){
       S.view = tab; drawBoard(S.view==='rel' && S.relDraw);
     }
 
-    // Predeterminadas base y configurables
+    // ===== Predeterminadas base y configurables =====
     var PRESETS = [
       ['Cocina','Comedor',8],
       ['Patio de servicio','Cocina',8],
@@ -335,16 +337,12 @@ function showErr(e){
       ['Dorm 1','S.S.',4], ['Dorm 2','S.S.',4]
     ];
     var LS_KEY = 'diagassist.customPresets.v1';
-    function loadCustom(){
-      try{ return JSON.parse(localStorage.getItem(LS_KEY)||'[]') }catch(_){ return [] }
-    }
-    function saveCustom(arr){
-      try{ localStorage.setItem(LS_KEY, JSON.stringify(arr||[])) }catch(_){}
-    }
+    function loadCustom(){ return loadJSON(LS_KEY) || []; }
+    function saveCustom(arr){ saveJSON(LS_KEY, arr||[]); }
 
-    // MATRIZ: crear/limpiar
-    document.getElementById('btnInsertTable').addEventListener('click', function(){
-      var txt = document.getElementById('ambientesInput').value.trim();
+    // ===== MATRIZ =====
+    $('#btnInsertTable').addEventListener('click', function(){
+      var txt = $('#ambientesInput').value.trim();
       if(!txt){ alert('Escribe los ambientes separados por coma'); return; }
       S.ambientes = txt.split(',').map(function(s){ return s.trim(); }).filter(Boolean);
       S.zonas = {};
@@ -366,11 +364,11 @@ function showErr(e){
       if(S.ambientes.length>=20){ colsRoot.classList.add('compact'); }
       applyChipColors();
     });
-    document.getElementById('btnClearMatrix').addEventListener('click', function(){
+    $('#btnClearMatrix').addEventListener('click', function(){
       Object.keys(S.matrix).forEach(function(k){ S.matrix[k]=0; });
       renderMatrix(); drawBoard();
     });
-    document.getElementById('btnApplyPresets').addEventListener('click', function(){
+    $('#btnApplyPresets').addEventListener('click', function(){
       var map = {}; S.ambientes.forEach(function(n){ map[normalizeKey(n)] = n; });
       PRESETS.concat(loadCustom()).forEach(function(x){
         var A = map[normalizeKey(x[0])], B = map[normalizeKey(x[1])], val = Number(x[2])||0;
@@ -378,7 +376,7 @@ function showErr(e){
       });
       renderMatrix();
     });
-    document.getElementById('btnCfgCustom').addEventListener('click', function(){
+    $('#btnCfgCustom').addEventListener('click', function(){
       var cur = loadCustom();
       var txt = prompt('Agrega líneas A|B|valor (0/4/8). Actual se reemplaza.\nEj.: Cocina|Sala|4', cur.map(function(t){return t.join('|')}).join('\n'));
       if(txt==null) return;
@@ -392,35 +390,36 @@ function showErr(e){
       alert('Guardado. Usa “Aplicar predeterminadas” para aplicarlas.');
     });
 
-    // Exportar/Importar
-    document.getElementById('btnExport').addEventListener('click', function(){
-      var data = { version: VERSION, S: S, zoneStyle: zoneStyle };
+    // ===== Exportar/Importar =====
+    $('#btnExport').addEventListener('click', function(){
+      var data = { version: VERSION, S: S, zoneStyle: zoneStyle, customZones: S.customZones };
       var blob = new Blob([JSON.stringify(data)], {type:'application/json'});
       var a = el('a'); a.href = URL.createObjectURL(blob); a.download = 'diagassist_'+Date.now()+'.diagassist';
       a.click(); setTimeout(function(){ URL.revokeObjectURL(a.href); }, 1000);
     });
-    document.getElementById('btnImport').addEventListener('click', function(){ document.getElementById('fileImport').click(); });
-    document.getElementById('fileImport').addEventListener('change', function(e){
+    $('#btnImport').addEventListener('click', function(){ $('#fileImport').click(); });
+    $('#fileImport').addEventListener('change', function(e){
       var f=e.target.files[0]; if(!f) return;
       var rd=new FileReader(); rd.onload=function(){
         try{
           var data=JSON.parse(rd.result); if(!data||!data.S) throw new Error('Archivo no válido');
           S=data.S;
-          if(data.zoneStyle) { zoneStyle = data.zoneStyle; saveZoneStyle(); }
+          if(data.zoneStyle)  { zoneStyle = data.zoneStyle; saveJSON(LS_ZONE_STYLE, zoneStyle); }
+          if(data.customZones) { S.customZones = data.customZones; saveJSON(LS_CUSTOM_ZONES, S.customZones); }
           renderMatrix(); drawBoard(); applyChipColors(); alert('Importado ✓');
         }catch(err){ showErr(err); }
       }; rd.readAsText(f);
     });
 
-    // Render de matriz con zebra filas y columnas (más oscura)
+    // ===== Render de matriz (zebra filas/columnas) =====
     function renderMatrix(){
-      var host = document.getElementById('matrixHost'); host.innerHTML = '';
+      var host = $('#matrixHost'); host.innerHTML = '';
       if(S.ambientes.length===0){ host.innerHTML = '<div class="hint">Primero inserta la lista de ambientes.</div>'; return; }
       var tbl = el('table'), thead = el('thead'), hr = el('tr');
       hr.append(el('th',{textContent:'—',className:'sticky'}));
       S.ambientes.forEach(function(n, j){
         var th = el('th',{textContent:n,className:'sticky'});
-        if(j%2===1) th.style.background='var(--colAlt)'; // zebra columnas
+        if(j%2===1) th.style.background='var(--colAlt)';
         hr.append(th);
       });
       hr.append(el('th',{textContent:'Σ fila',className:'sticky'})); thead.append(hr); tbl.append(thead);
@@ -459,22 +458,22 @@ function showErr(e){
       tbl.append(tbody); host.append(tbl);
     }
 
-    // Preponderancia (anillos)
+    // ===== Preponderancia (anillos) =====
     function computeRings(){
       S.sums={}; S.ambientes.forEach(function(a){ var s=0; S.ambientes.forEach(function(b){ if(a!==b) s+=getRel(a,b); }); S.sums[a]=s; });
       var uniq = Array.from(new Set(Object.values(S.sums))).sort(function(a,b){return b-a});
-      var svg = document.getElementById('boardSVG'), W = svg.parentElement.clientWidth, H = svg.parentElement.clientHeight;
+      var svg = $('#boardSVG'), W = svg.parentElement.clientWidth, H = svg.parentElement.clientHeight;
       var RMAX = Math.floor(Math.min(W,H)/2) - 40;
       var step = Math.max(48, Math.floor(RMAX / (uniq.length+0.5)));
       S.rings = uniq.map(function(sum,idx){ return {sum:sum, r: step + idx*step}; });
     }
-    document.getElementById('btnPreponderancia').addEventListener('click', function(){
+    $('#btnPreponderancia').addEventListener('click', function(){
       if(S.ambientes.length===0){ alert('Primero crea la matriz.'); return; }
       computeRings(); S.nodes=[]; drawBoard();
     });
-    document.getElementById('btnGenerarAmbientes').addEventListener('click', function(){
+    $('#btnGenerarAmbientes').addEventListener('click', function(){
       if(!S.rings.length) computeRings();
-      var svg = document.getElementById('boardSVG'), W=svg.parentElement.clientWidth, H=svg.parentElement.clientHeight, cx=W/2, cy=H/2;
+      var svg = $('#boardSVG'), W=svg.parentElement.clientWidth, H=svg.parentElement.clientHeight, cx=W/2, cy=H/2;
       S.nodes=[]; var groups={};
       S.ambientes.forEach(function(n){ var s=S.sums[n]||0; (groups[s]=groups[s]||[]).push(n); });
       Object.keys(groups).forEach(function(sum){
@@ -486,32 +485,32 @@ function showErr(e){
       });
       drawBoard();
     });
-    document.getElementById('btnCopiarARelaciones').addEventListener('click', function(){ switchTab('rel'); });
+    $('#btnCopiarARelaciones').addEventListener('click', function(){ switchTab('rel'); });
 
-    // Relaciones
-    document.getElementById('btnGenRelaciones').addEventListener('click', function(){ S.relDraw=true; switchTab('rel'); });
-    document.getElementById('btnClearRel').addEventListener('click', function(){ S.relDraw=false; drawBoard(false); });
-    document.getElementById('chkHideRings').addEventListener('change', function(e){ S.relOpts.hideRings=e.target.checked; drawBoard(S.relDraw); });
-    document.getElementById('chkSolid').addEventListener('change', function(e){ S.relOpts.showSolid=e.target.checked; drawBoard(S.relDraw); });
-    document.getElementById('chkDashed').addEventListener('change', function(e){ S.relOpts.showDashed=e.target.checked; drawBoard(S.relDraw); });
+    // ===== Relaciones =====
+    $('#btnGenRelaciones').addEventListener('click', function(){ S.relDraw=true; switchTab('rel'); });
+    $('#btnClearRel').addEventListener('click', function(){ S.relDraw=false; drawBoard(false); });
+    $('#chkHideRings').addEventListener('change', function(e){ S.relOpts.hideRings=e.target.checked; drawBoard(S.relDraw); });
+    $('#chkSolid').addEventListener('change', function(e){ S.relOpts.showSolid=e.target.checked; drawBoard(S.relDraw); });
+    $('#chkDashed').addEventListener('change', function(e){ S.relOpts.showDashed=e.target.checked; drawBoard(S.relDraw); });
 
-    // Circulaciones
-    document.getElementById('btnToArrows').addEventListener('click', function(){ switchTab('circ'); });
-    document.getElementById('btnAddText').addEventListener('click', function(){
+    // ===== Circulaciones =====
+    $('#btnToArrows').addEventListener('click', function(){ switchTab('circ'); });
+    $('#btnAddText').addEventListener('click', function(){
       var txt = prompt('Texto:'); if(!txt) return;
-      var svg=document.getElementById('boardSVG'), W=svg.clientWidth, H=svg.clientHeight, x=W/2, y=30+Math.random()*60;
+      var svg=$('#boardSVG'), W=svg.clientWidth, H=svg.clientHeight, x=W/2, y=30+Math.random()*60;
       S.freeText.push({x:x,y:y,txt:txt,fill:'#111'}); drawBoard(S.relDraw);
     });
-    document.getElementById('btnPct').addEventListener('click', function(){
+    $('#btnPct').addEventListener('click', function(){
       alert('Haz clic en una flecha para asignar/editar su %; el texto se orienta paralelo a la flecha y en su punto medio.');
     });
     var dirMode=false;
-    document.getElementById('btnDirMode').addEventListener('click', function(){
+    $('#btnDirMode').addEventListener('click', function(){
       dirMode=!dirMode; this.textContent='Editar dirección de flechas: '+(dirMode?'ON':'OFF');
     });
 
-    // Burbujas
-    document.getElementById('btnToOvals').addEventListener('click', function(){
+    // ===== Burbujas =====
+    $('#btnToOvals').addEventListener('click', function(){
       if(!S.nodes.length){ alert('Genera primero las burbujas.'); return; }
       var maxA=0, areas={};
       S.nodes.forEach(function(n){
@@ -524,35 +523,35 @@ function showErr(e){
       });
       switchTab('burb');
     });
-    document.getElementById('btnAddWindow').addEventListener('click', function(){
-      var svg=document.getElementById('boardSVG'), W=svg.clientWidth, H=svg.clientHeight, x=W/2+(Math.random()*60-30), y=H/2+(Math.random()*60-30);
+    $('#btnAddWindow').addEventListener('click', function(){
+      var svg=$('#boardSVG'), W=svg.clientWidth, H=svg.clientHeight, x=W/2+(Math.random()*60-30), y=H/2+(Math.random()*60-30);
       S.freeText.push({x:x,y:y,txt:'V',fill:'#111'}); drawBoard();
     });
-    document.getElementById('btnAddVest').addEventListener('click', function(){
-      var svg=document.getElementById('boardSVG'), W=svg.clientWidth, H=svg.clientHeight, x=W/2, y=H/2;
+    $('#btnAddVest').addEventListener('click', function(){
+      var svg=$('#boardSVG'), W=svg.clientWidth, H=svg.clientHeight, x=W/2, y=H/2;
       S.nodes.push({name:'VEST',x:x,y:y,rx:26,ry:18,lock:false,zone:'servicio'}); switchTab('burb');
     });
-    document.getElementById('btnDelBubble').addEventListener('click', function(){
+    $('#btnDelBubble').addEventListener('click', function(){
       if(!selectedNode){ alert('Selecciona primero una burbuja.'); return; }
       var i = S.nodes.indexOf(selectedNode); if(i>=0){ S.nodes.splice(i,1); selectedNode=null; drawBoard(S.view==='rel'&&S.relDraw); }
     });
 
-    // Entorno
+    // ===== Entorno =====
     document.querySelectorAll('.symBtn').forEach(function(b){
       b.addEventListener('click', function(){
-        var label=b.getAttribute('data-sym'); var svg=document.getElementById('boardSVG'), W=svg.clientWidth, H=svg.clientHeight;
+        var label=b.getAttribute('data-sym'); var svg=$('#boardSVG'), W=svg.clientWidth, H=svg.clientHeight;
         var x=30+Math.random()*80, y=40+Math.random()*80; S.symbols.push({x:x,y:y,txt:label,w:60,h:24});
         switchTab('ent'); drawBoard();
       });
     });
-    document.getElementById('btnAmbientLayer').addEventListener('click', function(){ S.ambientLayer=!S.ambientLayer; drawBoard(); });
-    document.getElementById('btnEntText').addEventListener('click', function(){
+    $('#btnAmbientLayer').addEventListener('click', function(){ S.ambientLayer=!S.ambientLayer; drawBoard(); });
+    $('#btnEntText').addEventListener('click', function(){
       var txt = prompt('Texto:'); if(!txt) return;
-      var svg=document.getElementById('boardSVG'), x=svg.clientWidth/2, y=svg.clientHeight-20; S.symbols.push({x:x,y:y,txt:txt,w:80,h:26});
+      var svg=$('#boardSVG'), x=svg.clientWidth/2, y=svg.clientHeight-20; S.symbols.push({x:x,y:y,txt:txt,w:80,h:26});
       drawBoard();
     });
 
-    // Zonas (incluye config por color y "Otro" con nombre + color)
+    // ===== Zonas (⚙ + Otro + personalizados visibles) =====
     var selectedNode=null;
     document.addEventListener('click', function(e){
       var g = e.target.closest('.node');
@@ -565,53 +564,79 @@ function showErr(e){
       var name = zoneStyle[key] || 'Azul';
       return ZONE_COLORS[name] || ZONE_COLORS['Azul'];
     }
-
-    function setZone(z, custom){
+    function setZone(z, style){
       if(!selectedNode){ alert('Primero selecciona una burbuja'); return; }
       selectedNode.zone=z;
-      var style = custom ? custom : styleForZoneKey(z);
-      selectedNode.fill = style.fill;
-      selectedNode.stroke = style.stroke;
+      var st = style || styleForZoneKey(z);
+      selectedNode.fill = st.fill;
+      selectedNode.stroke = st.stroke;
       drawBoard(S.view==='rel'&&S.relDraw);
     }
 
-    // Aplicación de zonas con color por defecto
-    document.getElementById('zSocial').addEventListener('click', function(){ setZone('social'); });
-    document.getElementById('zSemi').addEventListener('click', function(){ setZone('semi'); });
-    document.getElementById('zPrivada').addEventListener('click', function(){ setZone('privada'); });
-    document.getElementById('zServicio').addEventListener('click', function(){ setZone('servicio'); });
+    // Aplicación de zonas por defecto
+    $('#zSocial').addEventListener('click', function(){ setZone('social'); });
+    $('#zSemi').addEventListener('click', function(){ setZone('semi'); });
+    $('#zPrivada').addEventListener('click', function(){ setZone('privada'); });
+    $('#zServicio').addEventListener('click', function(){ setZone('servicio'); });
 
     // Configurar color por defecto de cada zona
     function configureZoneDefault(which){
       var current = zoneStyle[which] || 'Azul';
       var pick = pickColorName(current);
       if(!pick) return;
-      zoneStyle[which] = pick; saveZoneStyle(); applyChipColors();
+      zoneStyle[which] = pick; saveJSON(LS_ZONE_STYLE, zoneStyle); applyChipColors();
       if(selectedNode && selectedNode.zone===which){
-        selectedNode.fill = ZONE_COLORS[pick].fill;
-        selectedNode.stroke = ZONE_COLORS[pick].stroke;
-        drawBoard(S.view==='rel'&&S.relDraw);
+        var st = ZONE_COLORS[pick];
+        selectedNode.fill = st.fill; selectedNode.stroke = st.stroke; drawBoard(S.view==='rel'&&S.relDraw);
       }
     }
-    document.getElementById('cfgSocial').addEventListener('click', function(){ configureZoneDefault('social'); });
-    document.getElementById('cfgSemi').addEventListener('click', function(){ configureZoneDefault('semi'); });
-    document.getElementById('cfgPrivada').addEventListener('click', function(){ configureZoneDefault('privada'); });
-    document.getElementById('cfgServicio').addEventListener('click', function(){ configureZoneDefault('servicio'); });
+    $('#cfgSocial').addEventListener('click', function(){ configureZoneDefault('social'); });
+    $('#cfgSemi').addEventListener('click', function(){ configureZoneDefault('semi'); });
+    $('#cfgPrivada').addEventListener('click', function(){ configureZoneDefault('privada'); });
+    $('#cfgServicio').addEventListener('click', function(){ configureZoneDefault('servicio'); });
 
-    // "Otro": pide nombre y color preestablecido
-    document.getElementById('zCustom').addEventListener('click', function(){
+    // “Otro…”: pide nombre y color, lo guarda y crea chip
+    $('#zCustom').addEventListener('click', function(){
       if(!selectedNode){ alert('Selecciona una burbuja'); return; }
-      var nombre = prompt('Nombre de la zona personalizada:' , selectedNode.zone==='custom'? (selectedNode.customName||'') : '');
+      var nombre = prompt('Nombre de la zona personalizada:' , '');
       if(nombre==null || !nombre.trim()) return;
-      var pick = pickColorName(zoneStyle['social']||'Azul'); if(!pick) return;
-      selectedNode.zone = 'custom';
+      var pick = pickColorName('Azul'); if(!pick) return;
+      var st = ZONE_COLORS[pick];
+      // Aplica a la burbuja seleccionada
+      selectedNode.zone = 'custom:'+nombre.trim();
       selectedNode.customName = nombre.trim();
-      selectedNode.fill = ZONE_COLORS[pick].fill;
-      selectedNode.stroke = ZONE_COLORS[pick].stroke;
+      selectedNode.fill = st.fill; selectedNode.stroke = st.stroke;
+      // Agrega/actualiza preset
+      var idx = S.customZones.findIndex(function(z){ return z.name.toLowerCase()===nombre.trim().toLowerCase(); });
+      var entry = {name:nombre.trim(), colorName:pick, fill:st.fill, stroke:st.stroke};
+      if(idx>=0) S.customZones[idx]=entry; else S.customZones.push(entry);
+      saveJSON(LS_CUSTOM_ZONES, S.customZones);
+      renderCustomZoneChips();
       drawBoard(S.view==='rel'&&S.relDraw);
     });
 
-    // ===== Geometría: punto en borde de círculo/óvalo para flechas =====
+    // Render de chips personalizados
+    function renderCustomZoneChips(){
+      var host = document.getElementById('customZonesHost');
+      host.innerHTML='';
+      if(!S.customZones.length) return;
+      S.customZones.forEach(function(cz, i){
+        var btn = document.createElement('button');
+        btn.className='chipbtn';
+        btn.title='Aplicar zona personalizada';
+        var dot = document.createElement('span'); dot.className='dot'; dot.style.background=cz.fill; dot.style.borderColor=cz.stroke;
+        btn.appendChild(dot);
+        btn.appendChild(document.createTextNode(' '+cz.name));
+        btn.addEventListener('click', function(){
+          if(!selectedNode){ alert('Selecciona una burbuja'); return; }
+          setZone('custom:'+cz.name, {fill:cz.fill, stroke:cz.stroke});
+          selectedNode.customName = cz.name;
+        });
+        host.appendChild(btn);
+      });
+    }
+
+    // ===== Geometría flechas =====
     function edgePoint(ax,ay,bx,by,node){
       var dx=bx-ax, dy=by-ay;
       var angle=Math.atan2(dy,dx);
@@ -678,7 +703,7 @@ function showErr(e){
 
             if(S.view==='circ'){
               var k=keyAB(a.name,b.name);
-              if(S.flowDir[k]==null) S.flowDir[k]=+1; // por defecto A→B
+              if(S.flowDir[k]==null) S.flowDir[k]=+1;
               var from=a, to=b;
               if(S.flowDir[k]<0){ from=b; to=a; }
               var A = edgePoint(from.x,from.y,to.x,to.y,from);
@@ -720,20 +745,20 @@ function showErr(e){
       var gNodes=document.createElementNS('http://www.w3.org/2000/svg','g'); svg.appendChild(gNodes);
       S.nodes.forEach(function(n){
         var g=document.createElementNS('http://www.w3.org/2000/svg','g');
-        g.classList.add('node'); g.dataset.zone=n.zone||'social';
+        g.classList.add('node');
         g.setAttribute('transform','translate('+n.x+','+n.y+')');
-        var fill=n.fill || (styleForZoneKey(n.zone).fill);
-        var stroke=n.stroke || (styleForZoneKey(n.zone).stroke);
+        var fill=n.fill || (styleForZoneKey(n.zone||'social').fill);
+        var stroke=n.stroke || (styleForZoneKey(n.zone||'social').stroke);
         var mainShape;
         if(n.rx && n.ry){
           mainShape=document.createElementNS('http://www.w3.org/2000/svg','ellipse');
           mainShape.setAttribute('rx',n.rx); mainShape.setAttribute('ry',n.ry);
-          mainShape.setAttribute('fill',fill); mainShape.setAttribute('stroke',stroke); mainShape.setAttribute('stroke-width','1.5');
         }else{
           mainShape=document.createElementNS('http://www.w3.org/2000/svg','circle'); mainShape.setAttribute('r','16');
-          mainShape.setAttribute('fill',fill); mainShape.setAttribute('stroke',stroke); mainShape.setAttribute('stroke-width','1.5');
         }
+        mainShape.setAttribute('fill',fill); mainShape.setAttribute('stroke',stroke); mainShape.setAttribute('stroke-width','1.5');
         g.appendChild(mainShape);
+
         var t=document.createElementNS('http://www.w3.org/2000/svg','text'); t.setAttribute('text-anchor','middle'); t.setAttribute('dy','.35em'); t.textContent=n.name; g.appendChild(t);
 
         var dragging=false;
@@ -752,8 +777,11 @@ function showErr(e){
       });
     }
 
+    // Inicial
     applyChipColors();
+    renderCustomZoneChips();
     drawBoard(false);
+
   }catch(e){ showErr(e); }
 })(); // IIFE
 </script>
