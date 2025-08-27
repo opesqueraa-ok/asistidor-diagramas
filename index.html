@@ -3,16 +3,16 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Diag-Assist v1.7.2 — Matriz • Relaciones • Preponderancia</title>
-<meta name="x-version" content="1.7.2"/>
+<title>Diag-Assist v1.7.2-fix — Matriz • Relaciones • Preponderancia</title>
+<meta name="x-version" content="1.7.2-fix"/>
 <style>
   :root{
     --bg:#ffffff; --panel:#f7f7fb; --text:#1a2230; --muted:#687387; --accent:#2563eb;
     --border:#d8dbe6; --chip:#eef1f7; --ok:#16a34a; --warn:#f59e0b; --err:#ef4444;
     --grid-dot:#e6e9f2;
     /* v1.7.2: zebra más visible (ajusta aquí si quieres otro tono) */
-    --rowAlt:#eef1f7;   /* antes: #fbfcff */
-    --colAlt:#e8edf7;   /* antes: #f7faff */
+    --rowAlt:#eef1f7;   /* sugerido más oscuro: #e2e8f0 */
+    --colAlt:#e8edf7;   /* sugerido más oscuro: #dbe3f1 */
   }
   *{box-sizing:border-box}
   html,body{height:100%}
@@ -66,11 +66,11 @@
   <div class="wrap">
     <div class="row" style="justify-content:space-between;align-items:flex-start">
       <div>
-        <h1>Diag-Assist <span class="badge" id="versionBadge">v1.7.2</span></h1>
+        <h1>Diag-Assist <span class="badge" id="versionBadge">v1.7.2-fix</span></h1>
         <div class="sub">Matriz 8/4/0 → Preponderancia (anillos) → Relaciones. Basado en la guía de diagramación.</div>
       </div>
       <div class="row">
-        <button id="forceReload" title="Recargar forzando caché">Recargar v1.7.2</button>
+        <button id="forceReload" title="Recargar forzando caché">Recargar v1.7.2-fix</button>
       </div>
     </div>
     <div class="tabs">
@@ -109,9 +109,20 @@
           <button id="btnImport">Importar</button>
           <span class="hint">Lleva tu sesión a otro dispositivo.</span>
         </div>
+
         <div class="hint">Clic en una celda para ciclar 0 → 4 → 8 (diagonal bloqueada y simetría automática). Las sumas de fila/columna deben coincidir.</div>
+
         <div class="space"></div>
         <div id="matrixHost"></div>
+
+        <!-- 🔧 BOTONES QUE FALTABAN: anillos / generar / copiar -->
+        <div class="space"></div>
+        <div class="toolbar">
+          <button id="btnPreponderancia">Calcular anillos (Σ)</button>
+          <button id="btnGenerarAmbientes">Generar ambientes en anillos</button>
+          <button id="btnCopiarARelaciones" title="Pasa las burbujas al tab Relaciones">Copiar a “Relaciones”</button>
+        </div>
+
         <div class="space"></div>
         <div class="toolbar mini">
           <span>Colorear zona (selecciona una burbuja y pulsa):</span>
@@ -159,7 +170,7 @@
           <button id="btnPct">Colocar % en flechas</button>
           <button id="btnDirMode">Editar dirección de flechas: OFF</button>
         </div>
-        <div class="hint">Con “Editar dirección…” activado, haz clic en una flecha para invertir A→B / B→A. Con modo OFF, clic abre %.</div>
+        <div class="hint">Con “Editar dirección…” activado, clic en una flecha invierte A→B / B→A. Con modo OFF, clic abre %.</div>
       </div>
 
       <!-- ====== BURBUJAS ====== -->
@@ -169,6 +180,8 @@
           <button id="btnToOvals">Convertir burbujas a óvalos (m²)</button>
           <button id="btnAddWindow">Añadir ventana (V)</button>
           <button id="btnAddVest">Añadir VEST (óvalo)</button>
+          <!-- 🔧 BOTÓN QUE FALTABA: eliminar burbuja -->
+          <button id="btnDelBubble" title="Elimina la burbuja seleccionada">Eliminar burbuja</button>
         </div>
         <div class="hint">Asignar m² cambia el tamaño (proporcional). Arrastra la “V” y el “VEST”.</div>
       </div>
@@ -221,7 +234,7 @@ function showErr(e){
 
 (function(){
   try{
-    var VERSION = '1.7.2';
+    var VERSION = '1.7.2-fix';
 
     // Recarga anti-caché
     var reloadBtn = document.getElementById('forceReload');
@@ -251,7 +264,7 @@ function showErr(e){
       symbols: [] // entorno
     };
 
-    // ====== Paleta de colores preestablecida (v1.7.2) ======
+    // ====== Paleta de colores preestablecida ======
     var ZONE_COLORS = {
       'Rojo':     {fill:'#fee2e2', stroke:'#ef4444'},
       'Azul':     {fill:'#e0f2fe', stroke:'#2563eb'},
@@ -330,8 +343,8 @@ function showErr(e){
     }
 
     // MATRIZ: crear/limpiar
-    $('#btnInsertTable').addEventListener('click', function(){
-      var txt = $('#ambientesInput').value.trim();
+    document.getElementById('btnInsertTable').addEventListener('click', function(){
+      var txt = document.getElementById('ambientesInput').value.trim();
       if(!txt){ alert('Escribe los ambientes separados por coma'); return; }
       S.ambientes = txt.split(',').map(function(s){ return s.trim(); }).filter(Boolean);
       S.zonas = {};
@@ -353,11 +366,11 @@ function showErr(e){
       if(S.ambientes.length>=20){ colsRoot.classList.add('compact'); }
       applyChipColors();
     });
-    $('#btnClearMatrix').addEventListener('click', function(){
+    document.getElementById('btnClearMatrix').addEventListener('click', function(){
       Object.keys(S.matrix).forEach(function(k){ S.matrix[k]=0; });
       renderMatrix(); drawBoard();
     });
-    $('#btnApplyPresets').addEventListener('click', function(){
+    document.getElementById('btnApplyPresets').addEventListener('click', function(){
       var map = {}; S.ambientes.forEach(function(n){ map[normalizeKey(n)] = n; });
       PRESETS.concat(loadCustom()).forEach(function(x){
         var A = map[normalizeKey(x[0])], B = map[normalizeKey(x[1])], val = Number(x[2])||0;
@@ -365,7 +378,7 @@ function showErr(e){
       });
       renderMatrix();
     });
-    $('#btnCfgCustom').addEventListener('click', function(){
+    document.getElementById('btnCfgCustom').addEventListener('click', function(){
       var cur = loadCustom();
       var txt = prompt('Agrega líneas A|B|valor (0/4/8). Actual se reemplaza.\nEj.: Cocina|Sala|4', cur.map(function(t){return t.join('|')}).join('\n'));
       if(txt==null) return;
@@ -380,14 +393,14 @@ function showErr(e){
     });
 
     // Exportar/Importar
-    $('#btnExport').addEventListener('click', function(){
-      var data = { version: '1.7.2', S: S, zoneStyle: zoneStyle };
+    document.getElementById('btnExport').addEventListener('click', function(){
+      var data = { version: VERSION, S: S, zoneStyle: zoneStyle };
       var blob = new Blob([JSON.stringify(data)], {type:'application/json'});
       var a = el('a'); a.href = URL.createObjectURL(blob); a.download = 'diagassist_'+Date.now()+'.diagassist';
       a.click(); setTimeout(function(){ URL.revokeObjectURL(a.href); }, 1000);
     });
-    $('#btnImport').addEventListener('click', function(){ $('#fileImport').click(); });
-    $('#fileImport').addEventListener('change', function(e){
+    document.getElementById('btnImport').addEventListener('click', function(){ document.getElementById('fileImport').click(); });
+    document.getElementById('fileImport').addEventListener('change', function(e){
       var f=e.target.files[0]; if(!f) return;
       var rd=new FileReader(); rd.onload=function(){
         try{
@@ -401,7 +414,7 @@ function showErr(e){
 
     // Render de matriz con zebra filas y columnas (más oscura)
     function renderMatrix(){
-      var host = $('#matrixHost'); host.innerHTML = '';
+      var host = document.getElementById('matrixHost'); host.innerHTML = '';
       if(S.ambientes.length===0){ host.innerHTML = '<div class="hint">Primero inserta la lista de ambientes.</div>'; return; }
       var tbl = el('table'), thead = el('thead'), hr = el('tr');
       hr.append(el('th',{textContent:'—',className:'sticky'}));
@@ -450,18 +463,18 @@ function showErr(e){
     function computeRings(){
       S.sums={}; S.ambientes.forEach(function(a){ var s=0; S.ambientes.forEach(function(b){ if(a!==b) s+=getRel(a,b); }); S.sums[a]=s; });
       var uniq = Array.from(new Set(Object.values(S.sums))).sort(function(a,b){return b-a});
-      var svg = $('#boardSVG'), W = svg.parentElement.clientWidth, H = svg.parentElement.clientHeight;
+      var svg = document.getElementById('boardSVG'), W = svg.parentElement.clientWidth, H = svg.parentElement.clientHeight;
       var RMAX = Math.floor(Math.min(W,H)/2) - 40;
       var step = Math.max(48, Math.floor(RMAX / (uniq.length+0.5)));
       S.rings = uniq.map(function(sum,idx){ return {sum:sum, r: step + idx*step}; });
     }
-    $('#btnPreponderancia').addEventListener('click', function(){
+    document.getElementById('btnPreponderancia').addEventListener('click', function(){
       if(S.ambientes.length===0){ alert('Primero crea la matriz.'); return; }
       computeRings(); S.nodes=[]; drawBoard();
     });
-    $('#btnGenerarAmbientes').addEventListener('click', function(){
+    document.getElementById('btnGenerarAmbientes').addEventListener('click', function(){
       if(!S.rings.length) computeRings();
-      var svg = $('#boardSVG'), W=svg.parentElement.clientWidth, H=svg.parentElement.clientHeight, cx=W/2, cy=H/2;
+      var svg = document.getElementById('boardSVG'), W=svg.parentElement.clientWidth, H=svg.parentElement.clientHeight, cx=W/2, cy=H/2;
       S.nodes=[]; var groups={};
       S.ambientes.forEach(function(n){ var s=S.sums[n]||0; (groups[s]=groups[s]||[]).push(n); });
       Object.keys(groups).forEach(function(sum){
@@ -473,32 +486,32 @@ function showErr(e){
       });
       drawBoard();
     });
-    $('#btnCopiarARelaciones').addEventListener('click', function(){ switchTab('rel'); });
+    document.getElementById('btnCopiarARelaciones').addEventListener('click', function(){ switchTab('rel'); });
 
     // Relaciones
-    $('#btnGenRelaciones').addEventListener('click', function(){ S.relDraw=true; switchTab('rel'); });
-    $('#btnClearRel').addEventListener('click', function(){ S.relDraw=false; drawBoard(false); });
-    $('#chkHideRings').addEventListener('change', function(e){ S.relOpts.hideRings=e.target.checked; drawBoard(S.relDraw); });
-    $('#chkSolid').addEventListener('change', function(e){ S.relOpts.showSolid=e.target.checked; drawBoard(S.relDraw); });
-    $('#chkDashed').addEventListener('change', function(e){ S.relOpts.showDashed=e.target.checked; drawBoard(S.relDraw); });
+    document.getElementById('btnGenRelaciones').addEventListener('click', function(){ S.relDraw=true; switchTab('rel'); });
+    document.getElementById('btnClearRel').addEventListener('click', function(){ S.relDraw=false; drawBoard(false); });
+    document.getElementById('chkHideRings').addEventListener('change', function(e){ S.relOpts.hideRings=e.target.checked; drawBoard(S.relDraw); });
+    document.getElementById('chkSolid').addEventListener('change', function(e){ S.relOpts.showSolid=e.target.checked; drawBoard(S.relDraw); });
+    document.getElementById('chkDashed').addEventListener('change', function(e){ S.relOpts.showDashed=e.target.checked; drawBoard(S.relDraw); });
 
     // Circulaciones
-    $('#btnToArrows').addEventListener('click', function(){ switchTab('circ'); });
-    $('#btnAddText').addEventListener('click', function(){
+    document.getElementById('btnToArrows').addEventListener('click', function(){ switchTab('circ'); });
+    document.getElementById('btnAddText').addEventListener('click', function(){
       var txt = prompt('Texto:'); if(!txt) return;
-      var svg=$('#boardSVG'), W=svg.clientWidth, H=svg.clientHeight, x=W/2, y=30+Math.random()*60;
+      var svg=document.getElementById('boardSVG'), W=svg.clientWidth, H=svg.clientHeight, x=W/2, y=30+Math.random()*60;
       S.freeText.push({x:x,y:y,txt:txt,fill:'#111'}); drawBoard(S.relDraw);
     });
-    $('#btnPct').addEventListener('click', function(){
+    document.getElementById('btnPct').addEventListener('click', function(){
       alert('Haz clic en una flecha para asignar/editar su %; el texto se orienta paralelo a la flecha y en su punto medio.');
     });
     var dirMode=false;
-    $('#btnDirMode').addEventListener('click', function(){
+    document.getElementById('btnDirMode').addEventListener('click', function(){
       dirMode=!dirMode; this.textContent='Editar dirección de flechas: '+(dirMode?'ON':'OFF');
     });
 
     // Burbujas
-    $('#btnToOvals').addEventListener('click', function(){
+    document.getElementById('btnToOvals').addEventListener('click', function(){
       if(!S.nodes.length){ alert('Genera primero las burbujas.'); return; }
       var maxA=0, areas={};
       S.nodes.forEach(function(n){
@@ -511,15 +524,15 @@ function showErr(e){
       });
       switchTab('burb');
     });
-    $('#btnAddWindow').addEventListener('click', function(){
-      var svg=$('#boardSVG'), W=svg.clientWidth, H=svg.clientHeight, x=W/2+(Math.random()*60-30), y=H/2+(Math.random()*60-30);
+    document.getElementById('btnAddWindow').addEventListener('click', function(){
+      var svg=document.getElementById('boardSVG'), W=svg.clientWidth, H=svg.clientHeight, x=W/2+(Math.random()*60-30), y=H/2+(Math.random()*60-30);
       S.freeText.push({x:x,y:y,txt:'V',fill:'#111'}); drawBoard();
     });
-    $('#btnAddVest').addEventListener('click', function(){
-      var svg=$('#boardSVG'), W=svg.clientWidth, H=svg.clientHeight, x=W/2, y=H/2;
+    document.getElementById('btnAddVest').addEventListener('click', function(){
+      var svg=document.getElementById('boardSVG'), W=svg.clientWidth, H=svg.clientHeight, x=W/2, y=H/2;
       S.nodes.push({name:'VEST',x:x,y:y,rx:26,ry:18,lock:false,zone:'servicio'}); switchTab('burb');
     });
-    $('#btnDelBubble').addEventListener('click', function(){
+    document.getElementById('btnDelBubble').addEventListener('click', function(){
       if(!selectedNode){ alert('Selecciona primero una burbuja.'); return; }
       var i = S.nodes.indexOf(selectedNode); if(i>=0){ S.nodes.splice(i,1); selectedNode=null; drawBoard(S.view==='rel'&&S.relDraw); }
     });
@@ -527,15 +540,15 @@ function showErr(e){
     // Entorno
     document.querySelectorAll('.symBtn').forEach(function(b){
       b.addEventListener('click', function(){
-        var label=b.getAttribute('data-sym'); var svg=$('#boardSVG'), W=svg.clientWidth, H=svg.clientHeight;
+        var label=b.getAttribute('data-sym'); var svg=document.getElementById('boardSVG'), W=svg.clientWidth, H=svg.clientHeight;
         var x=30+Math.random()*80, y=40+Math.random()*80; S.symbols.push({x:x,y:y,txt:label,w:60,h:24});
         switchTab('ent'); drawBoard();
       });
     });
-    $('#btnAmbientLayer').addEventListener('click', function(){ S.ambientLayer=!S.ambientLayer; drawBoard(); });
-    $('#btnEntText').addEventListener('click', function(){
+    document.getElementById('btnAmbientLayer').addEventListener('click', function(){ S.ambientLayer=!S.ambientLayer; drawBoard(); });
+    document.getElementById('btnEntText').addEventListener('click', function(){
       var txt = prompt('Texto:'); if(!txt) return;
-      var svg=$('#boardSVG'), x=svg.clientWidth/2, y=svg.clientHeight-20; S.symbols.push({x:x,y:y,txt:txt,w:80,h:26});
+      var svg=document.getElementById('boardSVG'), x=svg.clientWidth/2, y=svg.clientHeight-20; S.symbols.push({x:x,y:y,txt:txt,w:80,h:26});
       drawBoard();
     });
 
@@ -563,12 +576,12 @@ function showErr(e){
     }
 
     // Aplicación de zonas con color por defecto
-    $('#zSocial').addEventListener('click', function(){ setZone('social'); });
-    $('#zSemi').addEventListener('click', function(){ setZone('semi'); });
-    $('#zPrivada').addEventListener('click', function(){ setZone('privada'); });
-    $('#zServicio').addEventListener('click', function(){ setZone('servicio'); });
+    document.getElementById('zSocial').addEventListener('click', function(){ setZone('social'); });
+    document.getElementById('zSemi').addEventListener('click', function(){ setZone('semi'); });
+    document.getElementById('zPrivada').addEventListener('click', function(){ setZone('privada'); });
+    document.getElementById('zServicio').addEventListener('click', function(){ setZone('servicio'); });
 
-    // Configurar color por defecto de cada zona (se guarda en localStorage)
+    // Configurar color por defecto de cada zona
     function configureZoneDefault(which){
       var current = zoneStyle[which] || 'Azul';
       var pick = pickColorName(current);
@@ -580,13 +593,13 @@ function showErr(e){
         drawBoard(S.view==='rel'&&S.relDraw);
       }
     }
-    $('#cfgSocial').addEventListener('click', function(){ configureZoneDefault('social'); });
-    $('#cfgSemi').addEventListener('click', function(){ configureZoneDefault('semi'); });
-    $('#cfgPrivada').addEventListener('click', function(){ configureZoneDefault('privada'); });
-    $('#cfgServicio').addEventListener('click', function(){ configureZoneDefault('servicio'); });
+    document.getElementById('cfgSocial').addEventListener('click', function(){ configureZoneDefault('social'); });
+    document.getElementById('cfgSemi').addEventListener('click', function(){ configureZoneDefault('semi'); });
+    document.getElementById('cfgPrivada').addEventListener('click', function(){ configureZoneDefault('privada'); });
+    document.getElementById('cfgServicio').addEventListener('click', function(){ configureZoneDefault('servicio'); });
 
     // "Otro": pide nombre y color preestablecido
-    $('#zCustom').addEventListener('click', function(){
+    document.getElementById('zCustom').addEventListener('click', function(){
       if(!selectedNode){ alert('Selecciona una burbuja'); return; }
       var nombre = prompt('Nombre de la zona personalizada:' , selectedNode.zone==='custom'? (selectedNode.customName||'') : '');
       if(nombre==null || !nombre.trim()) return;
@@ -611,7 +624,7 @@ function showErr(e){
 
     // ===== Dibujo principal =====
     function drawBoard(drawEdges){
-      var svg = $('#boardSVG'); svg.innerHTML='';
+      var svg = document.getElementById('boardSVG'); svg.innerHTML='';
       var W = svg.parentElement.clientWidth, H = svg.parentElement.clientHeight;
       svg.setAttribute('width', W); svg.setAttribute('height', H);
       var cx=W/2, cy=H/2;
