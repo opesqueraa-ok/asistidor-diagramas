@@ -3,15 +3,16 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Diag-Assist v1.7.1 — Matriz • Relaciones • Preponderancia</title>
-<meta name="x-version" content="1.7.1"/>
+<title>Diag-Assist v1.7.2 — Matriz • Relaciones • Preponderancia</title>
+<meta name="x-version" content="1.7.2"/>
 <style>
   :root{
     --bg:#ffffff; --panel:#f7f7fb; --text:#1a2230; --muted:#687387; --accent:#2563eb;
     --border:#d8dbe6; --chip:#eef1f7; --ok:#16a34a; --warn:#f59e0b; --err:#ef4444;
     --grid-dot:#e6e9f2;
-    --rowAlt:#fbfcff; /* zebra filas */
-    --colAlt:#f7faff; /* zebra columnas */
+    /* v1.7.2: zebra más visible (ajusta aquí si quieres otro tono) */
+    --rowAlt:#eef1f7;   /* antes: #fbfcff */
+    --colAlt:#e8edf7;   /* antes: #f7faff */
   }
   *{box-sizing:border-box}
   html,body{height:100%}
@@ -56,6 +57,8 @@
   .optflag{font-size:11px;padding:2px 6px;border-radius:6px;border:1px solid var(--border);background:#fff}
   .compact table{font-size:12px}
   .compact th,.compact td{padding:5px}
+  .mini{font-size:12px}
+  .cfgbtn{padding:4px 6px;border-radius:8px}
 </style>
 </head>
 <body data-js="ready">
@@ -63,11 +66,11 @@
   <div class="wrap">
     <div class="row" style="justify-content:space-between;align-items:flex-start">
       <div>
-        <h1>Diag‑Assist <span class="badge" id="versionBadge">v1.7.1</span></h1>
+        <h1>Diag-Assist <span class="badge" id="versionBadge">v1.7.2</span></h1>
         <div class="sub">Matriz 8/4/0 → Preponderancia (anillos) → Relaciones. Basado en la guía de diagramación.</div>
       </div>
       <div class="row">
-        <button id="forceReload" title="Recargar forzando caché">Recargar v1.7.1</button>
+        <button id="forceReload" title="Recargar forzando caché">Recargar v1.7.2</button>
       </div>
     </div>
     <div class="tabs">
@@ -98,7 +101,7 @@
           <button id="btnApplyPresets">Aplicar predeterminadas</button>
           <button id="btnClearMatrix">Limpiar matriz</button>
           <button id="btnCfgCustom">Config. predeter. personalizadas</button>
-          <span class="optflag">Zebra filas/columnas</span>
+          <span class="optflag">Zebra más oscura</span>
         </div>
         <div class="toolbar">
           <button id="btnExport">Exportar (.diagassist)</button>
@@ -110,25 +113,27 @@
         <div class="space"></div>
         <div id="matrixHost"></div>
         <div class="space"></div>
-        <div class="toolbar">
-          <button id="btnPreponderancia">Calcular anillos (Σ)</button>
-          <button id="btnGenerarAmbientes">Generar ambientes en anillos</button>
-          <button id="btnCopiarARelaciones" title="Pasa las burbujas al tab Relaciones">Copiar a “Relaciones”</button>
-          <button id="btnDelBubble" title="Elimina la burbuja seleccionada">Eliminar burbuja</button>
-        </div>
-        <div class="toolbar">
-          <span class="hint">Colorear zona (selecciona una burbuja y pulsa):</span>
-          <button id="zSocial">Social</button>
-          <button id="zSemi">Semi‑Privado</button>
-          <button id="zPrivada">Privada</button>
-          <button id="zServicio">Servicio</button>
-          <button id="zCustom">Otro: personalizar…</button>
+        <div class="toolbar mini">
+          <span>Colorear zona (selecciona una burbuja y pulsa):</span>
+          <span>
+            <button id="zSocial">Social</button><button id="cfgSocial" class="cfgbtn" title="Cambiar color por defecto de Social">⚙</button>
+          </span>
+          <span>
+            <button id="zSemi">Semi-Privado</button><button id="cfgSemi" class="cfgbtn" title="Cambiar color por defecto de Semi-Privado">⚙</button>
+          </span>
+          <span>
+            <button id="zPrivada">Privada</button><button id="cfgPrivada" class="cfgbtn" title="Cambiar color por defecto de Privada">⚙</button>
+          </span>
+          <span>
+            <button id="zServicio">Servicio</button><button id="cfgServicio" class="cfgbtn" title="Cambiar color por defecto de Servicio">⚙</button>
+          </span>
+          <button id="zCustom">Otro… (nombre + color)</button>
         </div>
         <div class="legend">
-          <span class="chip"><svg width="14" height="14"><circle cx="7" cy="7" r="6" fill="#eef6ff" stroke="#a855f7"/></svg> Privada</span>
-          <span class="chip"><svg width="14" height="14"><circle cx="7" cy="7" r="6" fill="#f3f5ff" stroke="#64748b"/></svg> Semi‑Privado</span>
-          <span class="chip"><svg width="14" height="14"><circle cx="7" cy="7" r="6" fill="#fff7ed" stroke="#f59e0b"/></svg> Servicio</span>
-          <span class="chip"><svg width="14" height="14"><circle cx="7" cy="7" r="6" fill="#f0f9ff" stroke="#2563eb"/></svg> Social/otra</span>
+          <span class="chip" id="chipPriv"><svg width="14" height="14"><circle cx="7" cy="7" r="6"/></svg> Privada</span>
+          <span class="chip" id="chipSemi"><svg width="14" height="14"><circle cx="7" cy="7" r="6"/></svg> Semi-Privado</span>
+          <span class="chip" id="chipServ"><svg width="14" height="14"><circle cx="7" cy="7" r="6"/></svg> Servicio</span>
+          <span class="chip" id="chipSoc"><svg width="14" height="14"><circle cx="7" cy="7" r="6"/></svg> Social</span>
         </div>
       </div>
 
@@ -216,7 +221,7 @@ function showErr(e){
 
 (function(){
   try{
-    var VERSION = '1.7.1';
+    var VERSION = '1.7.2';
 
     // Recarga anti-caché
     var reloadBtn = document.getElementById('forceReload');
@@ -246,13 +251,56 @@ function showErr(e){
       symbols: [] // entorno
     };
 
+    // ====== Paleta de colores preestablecida (v1.7.2) ======
+    var ZONE_COLORS = {
+      'Rojo':     {fill:'#fee2e2', stroke:'#ef4444'},
+      'Azul':     {fill:'#e0f2fe', stroke:'#2563eb'},
+      'Amarillo': {fill:'#fef9c3', stroke:'#f59e0b'},
+      'Verde':    {fill:'#dcfce7', stroke:'#16a34a'},
+      'Morado':   {fill:'#ede9fe', stroke:'#7c3aed'},
+      'Rosado':   {fill:'#ffe4e6', stroke:'#f43f5e'},
+      'Gris':     {fill:'#eef1f7', stroke:'#64748b'},
+      'Café':     {fill:'#ede3d7', stroke:'#7b5e57'},
+      'Naranja':  {fill:'#ffedd5', stroke:'#ea580c'}
+    };
+    var LS_ZONE_STYLE = 'diagassist.zoneStyles.v1';
+    var zoneStyle = loadZoneStyle() || {social:'Azul', semi:'Gris', privada:'Morado', servicio:'Naranja'};
+
+    function loadZoneStyle(){ try{ return JSON.parse(localStorage.getItem(LS_ZONE_STYLE)||''); }catch(_){ return null; } }
+    function saveZoneStyle(){ try{ localStorage.setItem(LS_ZONE_STYLE, JSON.stringify(zoneStyle)); }catch(_){} }
+
+    function applyChipColors(){
+      var chips = [
+        ['chipPriv','privada'],
+        ['chipSemi','semi'],
+        ['chipServ','servicio'],
+        ['chipSoc','social']
+      ];
+      chips.forEach(function([id,key]){
+        var chip = document.getElementById(id);
+        var colName = zoneStyle[key]||'Azul';
+        var col = ZONE_COLORS[colName]||ZONE_COLORS['Azul'];
+        var circle = chip && chip.querySelector('circle');
+        if(circle){ circle.setAttribute('fill', col.fill); circle.setAttribute('stroke', col.stroke); }
+      });
+    }
+
+    function pickColorName(defaultName){
+      var names = Object.keys(ZONE_COLORS);
+      var choice = prompt('Elige un color ('+names.join(', ')+'):', defaultName||names[0]);
+      if(choice==null) return null;
+      choice = choice.trim();
+      var found = names.find(function(n){ return n.toLowerCase()===choice.toLowerCase(); });
+      return found || null;
+    }
+
     // Utilidades
     var $ = function(s){ return document.querySelector(s); };
     var el = function(t, attrs){ var x = document.createElement(t); if(attrs) Object.assign(x, attrs); return x; };
     var keyAB = function(a,b){ return a<b ? (a+'|'+b) : (b+'|'+a); };
     function setRel(a,b,val){ if(a===b) return; S.matrix[keyAB(a,b)] = val; }
     function getRel(a,b){ if(a===b) return 0; return S.matrix[keyAB(a,b)] != null ? S.matrix[keyAB(a,b)] : 0; }
-    function normalizeKey(s){ return (s||'').normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').toLowerCase().trim(); }
+    function normalizeKey(s){ return (s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim(); }
 
     // Tabs
     document.querySelectorAll('.tabbtn').forEach(function(btn){
@@ -260,7 +308,7 @@ function showErr(e){
     });
     function switchTab(tab){
       document.querySelectorAll('.tabbtn').forEach(function(x){ x.classList.remove('active'); });
-      var tb = document.querySelector('.tabbtn[data-tab=\"'+tab+'\"]'); if(tb) tb.classList.add('active');
+      var tb = document.querySelector('.tabbtn[data-tab="'+tab+'"]'); if(tb) tb.classList.add('active');
       document.querySelectorAll('.tab').forEach(function(x){ x.style.display='none'; });
       var t = document.querySelector('.tab-'+tab); if(t) t.style.display='';
       S.view = tab; drawBoard(S.view==='rel' && S.relDraw);
@@ -303,6 +351,7 @@ function showErr(e){
       drawBoard();
       var colsRoot = document.getElementById('colsRoot');
       if(S.ambientes.length>=20){ colsRoot.classList.add('compact'); }
+      applyChipColors();
     });
     $('#btnClearMatrix').addEventListener('click', function(){
       Object.keys(S.matrix).forEach(function(k){ S.matrix[k]=0; });
@@ -318,10 +367,10 @@ function showErr(e){
     });
     $('#btnCfgCustom').addEventListener('click', function(){
       var cur = loadCustom();
-      var txt = prompt('Agrega líneas A|B|valor (0/4/8). Actual se reemplaza.\\nEj.: Cocina|Sala|4', cur.map(function(t){return t.join('|')}).join('\\n'));
+      var txt = prompt('Agrega líneas A|B|valor (0/4/8). Actual se reemplaza.\nEj.: Cocina|Sala|4', cur.map(function(t){return t.join('|')}).join('\n'));
       if(txt==null) return;
       var arr = [];
-      txt.split(/\\n+/).forEach(function(line){
+      txt.split(/\n+/).forEach(function(line){
         line=line.trim(); if(!line) return;
         var p = line.split('|'); if(p.length<3) return;
         arr.push([p[0].trim(), p[1].trim(), Number(p[2])||0]);
@@ -332,7 +381,7 @@ function showErr(e){
 
     // Exportar/Importar
     $('#btnExport').addEventListener('click', function(){
-      var data = { version: '1.7.1', S: S };
+      var data = { version: '1.7.2', S: S, zoneStyle: zoneStyle };
       var blob = new Blob([JSON.stringify(data)], {type:'application/json'});
       var a = el('a'); a.href = URL.createObjectURL(blob); a.download = 'diagassist_'+Date.now()+'.diagassist';
       a.click(); setTimeout(function(){ URL.revokeObjectURL(a.href); }, 1000);
@@ -343,19 +392,22 @@ function showErr(e){
       var rd=new FileReader(); rd.onload=function(){
         try{
           var data=JSON.parse(rd.result); if(!data||!data.S) throw new Error('Archivo no válido');
-          S=data.S; renderMatrix(); drawBoard(); alert('Importado ✓');
+          S=data.S;
+          if(data.zoneStyle) { zoneStyle = data.zoneStyle; saveZoneStyle(); }
+          renderMatrix(); drawBoard(); applyChipColors(); alert('Importado ✓');
         }catch(err){ showErr(err); }
       }; rd.readAsText(f);
     });
 
+    // Render de matriz con zebra filas y columnas (más oscura)
     function renderMatrix(){
       var host = $('#matrixHost'); host.innerHTML = '';
-      if(S.ambientes.length===0){ host.innerHTML = '<div class=\"hint\">Primero inserta la lista de ambientes.</div>'; return; }
+      if(S.ambientes.length===0){ host.innerHTML = '<div class="hint">Primero inserta la lista de ambientes.</div>'; return; }
       var tbl = el('table'), thead = el('thead'), hr = el('tr');
       hr.append(el('th',{textContent:'—',className:'sticky'}));
       S.ambientes.forEach(function(n, j){
         var th = el('th',{textContent:n,className:'sticky'});
-        if(j%2===1) th.style.background='var(--colAlt)';
+        if(j%2===1) th.style.background='var(--colAlt)'; // zebra columnas
         hr.append(th);
       });
       hr.append(el('th',{textContent:'Σ fila',className:'sticky'})); thead.append(hr); tbl.append(thead);
@@ -390,7 +442,7 @@ function showErr(e){
         trS.append(td);
         if(s!==S.sums[b]) ok=false;
       });
-      trS.append(el('td',{innerHTML: ok ? '<span class=\"ok\">✓ OK</span>' : '<span class=\"err\">⚠ Revisar</span>'})); tbody.append(trS);
+      trS.append(el('td',{innerHTML: ok ? '<span class="ok">✓ OK</span>' : '<span class="err">⚠ Revisar</span>'})); tbody.append(trS);
       tbl.append(tbody); host.append(tbl);
     }
 
@@ -450,7 +502,7 @@ function showErr(e){
       if(!S.nodes.length){ alert('Genera primero las burbujas.'); return; }
       var maxA=0, areas={};
       S.nodes.forEach(function(n){
-        var v = prompt('Área en m² para \"'+n.name+'\":', n.area||''); if(v==null) return;
+        var v = prompt('Área en m² para "'+n.name+'":', n.area||''); if(v==null) return;
         var a=Math.max(1, Number(v)||1); areas[n.name]=a; if(a>maxA) maxA=a;
       });
       var maxR=42, k = maxR / Math.sqrt(maxA||1);
@@ -487,7 +539,7 @@ function showErr(e){
       drawBoard();
     });
 
-    // Zonas (incluye Semi‑Privado y Personalizado)
+    // Zonas (incluye config por color y "Otro" con nombre + color)
     var selectedNode=null;
     document.addEventListener('click', function(e){
       var g = e.target.closest('.node');
@@ -495,25 +547,58 @@ function showErr(e){
       var label = (g.querySelector('text')||{}).textContent;
       selectedNode = S.nodes.find(function(n){ return n.name===label; }) || null;
     });
+
+    function styleForZoneKey(key){
+      var name = zoneStyle[key] || 'Azul';
+      return ZONE_COLORS[name] || ZONE_COLORS['Azul'];
+    }
+
     function setZone(z, custom){
       if(!selectedNode){ alert('Primero selecciona una burbuja'); return; }
       selectedNode.zone=z;
-      if(custom && custom.fill) selectedNode.fill=custom.fill;
-      if(custom && custom.stroke) selectedNode.stroke=custom.stroke;
+      var style = custom ? custom : styleForZoneKey(z);
+      selectedNode.fill = style.fill;
+      selectedNode.stroke = style.stroke;
       drawBoard(S.view==='rel'&&S.relDraw);
     }
+
+    // Aplicación de zonas con color por defecto
     $('#zSocial').addEventListener('click', function(){ setZone('social'); });
     $('#zSemi').addEventListener('click', function(){ setZone('semi'); });
     $('#zPrivada').addEventListener('click', function(){ setZone('privada'); });
     $('#zServicio').addEventListener('click', function(){ setZone('servicio'); });
+
+    // Configurar color por defecto de cada zona (se guarda en localStorage)
+    function configureZoneDefault(which){
+      var current = zoneStyle[which] || 'Azul';
+      var pick = pickColorName(current);
+      if(!pick) return;
+      zoneStyle[which] = pick; saveZoneStyle(); applyChipColors();
+      if(selectedNode && selectedNode.zone===which){
+        selectedNode.fill = ZONE_COLORS[pick].fill;
+        selectedNode.stroke = ZONE_COLORS[pick].stroke;
+        drawBoard(S.view==='rel'&&S.relDraw);
+      }
+    }
+    $('#cfgSocial').addEventListener('click', function(){ configureZoneDefault('social'); });
+    $('#cfgSemi').addEventListener('click', function(){ configureZoneDefault('semi'); });
+    $('#cfgPrivada').addEventListener('click', function(){ configureZoneDefault('privada'); });
+    $('#cfgServicio').addEventListener('click', function(){ configureZoneDefault('servicio'); });
+
+    // "Otro": pide nombre y color preestablecido
     $('#zCustom').addEventListener('click', function(){
       if(!selectedNode){ alert('Selecciona una burbuja'); return; }
-      var fill=prompt('Color de relleno (hex o nombre CSS):','#e6f7ff'); if(fill==null) return;
-      var stroke=prompt('Color de borde:','#0ea5e9'); if(stroke==null) return;
-      setZone('custom', {fill:fill, stroke:stroke});
+      var nombre = prompt('Nombre de la zona personalizada:' , selectedNode.zone==='custom'? (selectedNode.customName||'') : '');
+      if(nombre==null || !nombre.trim()) return;
+      var pick = pickColorName(zoneStyle['social']||'Azul'); if(!pick) return;
+      selectedNode.zone = 'custom';
+      selectedNode.customName = nombre.trim();
+      selectedNode.fill = ZONE_COLORS[pick].fill;
+      selectedNode.stroke = ZONE_COLORS[pick].stroke;
+      drawBoard(S.view==='rel'&&S.relDraw);
     });
 
-    // Geometría: punto en borde de círculo/óvalo para flechas
+    // ===== Geometría: punto en borde de círculo/óvalo para flechas =====
     function edgePoint(ax,ay,bx,by,node){
       var dx=bx-ax, dy=by-ay;
       var angle=Math.atan2(dy,dx);
@@ -524,7 +609,7 @@ function showErr(e){
       return {x:ex,y:ey,angle:angle};
     }
 
-    // Dibujo principal
+    // ===== Dibujo principal =====
     function drawBoard(drawEdges){
       var svg = $('#boardSVG'); svg.innerHTML='';
       var W = svg.parentElement.clientWidth, H = svg.parentElement.clientHeight;
@@ -558,7 +643,7 @@ function showErr(e){
         var mk=document.createElementNS('http://www.w3.org/2000/svg','marker');
         mk.setAttribute('id','arrow'); mk.setAttribute('markerWidth','12'); mk.setAttribute('markerHeight','12');
         mk.setAttribute('refX','11'); mk.setAttribute('refY','3'); mk.setAttribute('orient','auto');
-        mk.innerHTML='<path d=\"M0,0 L11,3 L0,6 Z\" fill=\"#1f2937\"/>'; defs.appendChild(mk);
+        mk.innerHTML='<path d="M0,0 L11,3 L0,6 Z" fill="#1f2937"/>'; defs.appendChild(mk);
       }
 
       var gEdges=document.createElementNS('http://www.w3.org/2000/svg','g'); svg.appendChild(gEdges);
@@ -604,11 +689,9 @@ function showErr(e){
                 lbl.textContent=pct+'%'; gEdges.appendChild(lbl);
               }
 
-              // Click en flecha: si dirMode ON invierte dirección; si OFF pide %
-              var dirModeRef = function(){ return dirMode; };
               line2.addEventListener('click', (function(k){
                 return function(){
-                  if(dirModeRef()){
+                  if(dirMode){
                     S.flowDir[k] = (S.flowDir[k]||1)*(-1); drawBoard(drawEdges); return;
                   }
                   var v = prompt('Porcentaje de flujo (0-100):', (S.flowPct[k] != null ? S.flowPct[k] : ''));
@@ -626,9 +709,9 @@ function showErr(e){
         var g=document.createElementNS('http://www.w3.org/2000/svg','g');
         g.classList.add('node'); g.dataset.zone=n.zone||'social';
         g.setAttribute('transform','translate('+n.x+','+n.y+')');
+        var fill=n.fill || (styleForZoneKey(n.zone).fill);
+        var stroke=n.stroke || (styleForZoneKey(n.zone).stroke);
         var mainShape;
-        var fill=n.fill || (n.zone==='privada'?'#eef6ff': n.zone==='semi'?'#f3f5ff': n.zone==='servicio'?'#fff7ed':'#f0f9ff');
-        var stroke=n.stroke || (n.zone==='privada'?'#a855f7': n.zone==='semi'?'#64748b': n.zone==='servicio'?'#f59e0b':'#2563eb');
         if(n.rx && n.ry){
           mainShape=document.createElementNS('http://www.w3.org/2000/svg','ellipse');
           mainShape.setAttribute('rx',n.rx); mainShape.setAttribute('ry',n.ry);
@@ -654,39 +737,9 @@ function showErr(e){
         });
         gNodes.appendChild(g);
       });
-
-      // Textos sueltos (arrastrables)
-      if(S.freeText.length){
-        var gT=document.createElementNS('http://www.w3.org/2000/svg','g'); svg.appendChild(gT);
-        S.freeText.forEach(function(item){
-          var tt=document.createElementNS('http://www.w3.org/2000/svg','text');
-          tt.setAttribute('x',item.x); tt.setAttribute('y',item.y);
-          tt.setAttribute('fill',item.fill||'#111'); tt.setAttribute('font-size','14'); tt.setAttribute('text-anchor','middle'); tt.textContent=item.txt;
-          var dragging=false, off=[0,0];
-          tt.addEventListener('mousedown', function(e){ dragging=true; var bb=tt.getBBox(); off=[e.clientX-bb.x, e.clientY-bb.y]; });
-          svg.addEventListener('mouseup', function(){ dragging=false; });
-          svg.addEventListener('mousemove', function(e){ if(!dragging) return; var p=svg.getBoundingClientRect(); item.x=e.clientX-p.left-off[0]; item.y=e.clientY-p.top-off[1]; tt.setAttribute('x',item.x); tt.setAttribute('y',item.y); });
-          gT.appendChild(tt);
-        });
-      }
-
-      // Símbolos/Texto con “hitbox” invisible para arrastrar
-      if(S.symbols.length){
-        var gS=document.createElementNS('http://www.w3.org/2000/svg','g'); svg.appendChild(gS);
-        S.symbols.forEach(function(s){
-          var inv=document.createElementNS('http://www.w3.org/2000/svg','rect');
-          inv.setAttribute('x',s.x-30); inv.setAttribute('y',s.y-12); inv.setAttribute('width',60); inv.setAttribute('height',24);
-          inv.setAttribute('fill','transparent'); inv.style.cursor='move'; gS.appendChild(inv);
-          var tt=document.createElementNS('http://www.w3.org/2000/svg','text');
-          tt.setAttribute('x',s.x); tt.setAttribute('y',s.y+4); tt.setAttribute('text-anchor','middle'); tt.setAttribute('fill','#0a4'); tt.textContent=s.txt; gS.appendChild(tt);
-          var dragging=false, off=[0,0];
-          inv.addEventListener('mousedown', function(e){ dragging=true; var bb=inv.getBBox(); off=[e.clientX-bb.x, e.clientY-bb.y]; });
-          svg.addEventListener('mouseup', function(){ dragging=false; });
-          svg.addEventListener('mousemove', function(e){ if(!dragging) return; var p=svg.getBoundingClientRect(); s.x=e.clientX-p.left-off[0]; s.y=e.clientY-p.top-off[1]; drawBoard(drawEdges); });
-        });
-      }
     }
 
+    applyChipColors();
     drawBoard(false);
   }catch(e){ showErr(e); }
 })(); // IIFE
