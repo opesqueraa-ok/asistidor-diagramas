@@ -10,9 +10,9 @@
     --bg:#ffffff; --panel:#f7f7fb; --text:#1a2230; --muted:#687387; --accent:#2563eb;
     --border:#d8dbe6; --chip:#eef1f7; --ok:#16a34a; --warn:#f59e0b; --err:#ef4444;
     --grid-dot:#e6e9f2;
-    /* Zebra más visible (ajusta si quieres otro tono) */
-    --rowAlt:#eef1f7;   /* sugerido más oscuro: #e2e8f0 */
-    --colAlt:#e8edf7;   /* sugerido más oscuro: #dbe3f1 */
+    /* Zebra más visible */
+    --rowAlt:#eef1f7;    /* si quieres más oscuro: #e2e8f0 */
+    --colAlt:#e8edf7;    /* si quieres más oscuro: #dbe3f1 */
   }
   *{box-sizing:border-box}
   html,body{height:100%}
@@ -53,9 +53,17 @@
   .compact table{font-size:12px}
   .compact th,.compact td{padding:5px}
   .mini{font-size:12px}
-  .cfgbtn{padding:4px 6px;border-radius:8px}
-  .chipbtn{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--border);background:#fff;border-radius:999px;padding:6px 10px;cursor:pointer}
-  .dot{width:12px;height:12px;border-radius:50%;border:1px solid #0002;display:inline-block}
+
+  /* Chips de zonas unificados */
+  .chipbtn{
+    display:inline-flex;align-items:center;gap:8px;
+    border:1px solid var(--border);background:#fff;border-radius:999px;
+    padding:8px 12px;cursor:pointer
+  }
+  .chipbtn .dot{width:14px;height:14px;border-radius:50%;border:1px solid #0002;display:inline-block}
+  .cfgbtn{
+    padding:6px 8px;border-radius:10px;border:1px solid var(--border);background:#fff;cursor:pointer
+  }
 </style>
 </head>
 <body data-js="ready">
@@ -119,25 +127,9 @@
           <button id="btnCopiarARelaciones" title="Pasa las burbujas al tab Relaciones">Copiar a “Relaciones”</button>
         </div>
 
+        <!-- ====== Barrade zonas unificada ====== -->
         <div class="space"></div>
-        <div class="toolbar mini">
-          <span>Colorear zona (selecciona una burbuja y pulsa):</span>
-          <span>
-            <button id="zSocial">Social</button><button id="cfgSocial" class="cfgbtn" title="Cambiar color por defecto de Social">⚙</button>
-          </span>
-          <span>
-            <button id="zSemi">Semi-Privado</button><button id="cfgSemi" class="cfgbtn" title="Cambiar color por defecto de Semi-Privado">⚙</button>
-          </span>
-          <span>
-            <button id="zPrivada">Privada</button><button id="cfgPrivada" class="cfgbtn" title="Cambiar color por defecto de Privada">⚙</button>
-          </span>
-          <span>
-            <button id="zServicio">Servicio</button><button id="cfgServicio" class="cfgbtn" title="Cambiar color por defecto de Servicio">⚙</button>
-          </span>
-          <button id="zCustom">Otro… (nombre + color)</button>
-          <!-- Aquí aparecerán los personalizados -->
-          <span id="customZonesHost" style="display:flex;gap:6px;flex-wrap:wrap;"></span>
-        </div>
+        <div class="toolbar mini" id="zoneBar"></div>
 
         <div class="legend">
           <span class="chip" id="chipPriv"><svg width="14" height="14"><circle cx="7" cy="7" r="6"/></svg> Privada</span>
@@ -277,28 +269,12 @@ function showErr(e){
     };
     var LS_ZONE_STYLE   = 'diagassist.zoneStyles.v1';
     var LS_CUSTOM_ZONES = 'diagassist.userCustomZones.v1';
+    var LS_KEY_PRESETS  = 'diagassist.customPresets.v1';
     var zoneStyle = loadJSON(LS_ZONE_STYLE) || {social:'Azul', semi:'Gris', privada:'Morado', servicio:'Naranja'};
     S.customZones = loadJSON(LS_CUSTOM_ZONES) || [];
 
     function loadJSON(key){ try{ return JSON.parse(localStorage.getItem(key)||''); }catch(_){ return null; } }
     function saveJSON(key,val){ try{ localStorage.setItem(key, JSON.stringify(val)); }catch(_){} }
-
-    function applyChipColors(){
-      var chips = [
-        ['chipPriv','privada'],
-        ['chipSemi','semi'],
-        ['chipServ','servicio'],
-        ['chipSoc','social']
-      ];
-      chips.forEach(function([id,key]){
-        var chip = document.getElementById(id);
-        var colName = zoneStyle[key]||'Azul';
-        var col = ZONE_COLORS[colName]||ZONE_COLORS['Azul'];
-        var circle = chip && chip.querySelector('circle');
-        if(circle){ circle.setAttribute('fill', col.fill); circle.setAttribute('stroke', col.stroke); }
-      });
-      renderCustomZoneChips();
-    }
 
     function pickColorName(defaultName){
       var names = Object.keys(ZONE_COLORS);
@@ -336,9 +312,8 @@ function showErr(e){
       ['Sala','Comedor',4],
       ['Dorm 1','S.S.',4], ['Dorm 2','S.S.',4]
     ];
-    var LS_KEY = 'diagassist.customPresets.v1';
-    function loadCustom(){ return loadJSON(LS_KEY) || []; }
-    function saveCustom(arr){ saveJSON(LS_KEY, arr||[]); }
+    function loadCustom(){ return loadJSON(LS_KEY_PRESETS) || []; }
+    function saveCustom(arr){ saveJSON(LS_KEY_PRESETS, arr||[]); }
 
     // ===== MATRIZ =====
     $('#btnInsertTable').addEventListener('click', function(){
@@ -363,6 +338,7 @@ function showErr(e){
       var colsRoot = document.getElementById('colsRoot');
       if(S.ambientes.length>=20){ colsRoot.classList.add('compact'); }
       applyChipColors();
+      renderZoneBar();
     });
     $('#btnClearMatrix').addEventListener('click', function(){
       Object.keys(S.matrix).forEach(function(k){ S.matrix[k]=0; });
@@ -405,8 +381,8 @@ function showErr(e){
           var data=JSON.parse(rd.result); if(!data||!data.S) throw new Error('Archivo no válido');
           S=data.S;
           if(data.zoneStyle)  { zoneStyle = data.zoneStyle; saveJSON(LS_ZONE_STYLE, zoneStyle); }
-          if(data.customZones) { S.customZones = data.customZones; saveJSON(LS_CUSTOM_ZONES, S.customZones); }
-          renderMatrix(); drawBoard(); applyChipColors(); alert('Importado ✓');
+          if(data.customZones){ S.customZones = data.customZones; saveJSON(LS_CUSTOM_ZONES, S.customZones); }
+          renderMatrix(); drawBoard(); applyChipColors(); renderZoneBar(); alert('Importado ✓');
         }catch(err){ showErr(err); }
       }; rd.readAsText(f);
     });
@@ -551,7 +527,12 @@ function showErr(e){
       drawBoard();
     });
 
-    // ===== Zonas (⚙ + Otro + personalizados visibles) =====
+    // ===== Zonas: chips unificados =====
+    function styleForZoneKey(key){
+      var name = zoneStyle[key] || 'Azul';
+      return ZONE_COLORS[name] || ZONE_COLORS['Azul'];
+    }
+
     var selectedNode=null;
     document.addEventListener('click', function(e){
       var g = e.target.closest('.node');
@@ -560,80 +541,119 @@ function showErr(e){
       selectedNode = S.nodes.find(function(n){ return n.name===label; }) || null;
     });
 
-    function styleForZoneKey(key){
-      var name = zoneStyle[key] || 'Azul';
-      return ZONE_COLORS[name] || ZONE_COLORS['Azul'];
-    }
     function setZone(z, style){
       if(!selectedNode){ alert('Primero selecciona una burbuja'); return; }
       selectedNode.zone=z;
-      var st = style || styleForZoneKey(z);
-      selectedNode.fill = st.fill;
-      selectedNode.stroke = st.stroke;
-      drawBoard(S.view==='rel'&&S.relDraw);
-    }
-
-    // Aplicación de zonas por defecto
-    $('#zSocial').addEventListener('click', function(){ setZone('social'); });
-    $('#zSemi').addEventListener('click', function(){ setZone('semi'); });
-    $('#zPrivada').addEventListener('click', function(){ setZone('privada'); });
-    $('#zServicio').addEventListener('click', function(){ setZone('servicio'); });
-
-    // Configurar color por defecto de cada zona
-    function configureZoneDefault(which){
-      var current = zoneStyle[which] || 'Azul';
-      var pick = pickColorName(current);
-      if(!pick) return;
-      zoneStyle[which] = pick; saveJSON(LS_ZONE_STYLE, zoneStyle); applyChipColors();
-      if(selectedNode && selectedNode.zone===which){
-        var st = ZONE_COLORS[pick];
-        selectedNode.fill = st.fill; selectedNode.stroke = st.stroke; drawBoard(S.view==='rel'&&S.relDraw);
+      var st = style || (z.startsWith('custom:') ? null : styleForZoneKey(z));
+      if(!st){
+        // custom con color guardado
+        var nm = z.replace(/^custom:/,'');
+        var cz = (S.customZones||[]).find(function(c){ return c.name.toLowerCase()===nm.toLowerCase(); });
+        st = cz || {fill:'#e0f2fe',stroke:'#2563eb'};
       }
-    }
-    $('#cfgSocial').addEventListener('click', function(){ configureZoneDefault('social'); });
-    $('#cfgSemi').addEventListener('click', function(){ configureZoneDefault('semi'); });
-    $('#cfgPrivada').addEventListener('click', function(){ configureZoneDefault('privada'); });
-    $('#cfgServicio').addEventListener('click', function(){ configureZoneDefault('servicio'); });
-
-    // “Otro…”: pide nombre y color, lo guarda y crea chip
-    $('#zCustom').addEventListener('click', function(){
-      if(!selectedNode){ alert('Selecciona una burbuja'); return; }
-      var nombre = prompt('Nombre de la zona personalizada:' , '');
-      if(nombre==null || !nombre.trim()) return;
-      var pick = pickColorName('Azul'); if(!pick) return;
-      var st = ZONE_COLORS[pick];
-      // Aplica a la burbuja seleccionada
-      selectedNode.zone = 'custom:'+nombre.trim();
-      selectedNode.customName = nombre.trim();
       selectedNode.fill = st.fill; selectedNode.stroke = st.stroke;
-      // Agrega/actualiza preset
-      var idx = S.customZones.findIndex(function(z){ return z.name.toLowerCase()===nombre.trim().toLowerCase(); });
-      var entry = {name:nombre.trim(), colorName:pick, fill:st.fill, stroke:st.stroke};
-      if(idx>=0) S.customZones[idx]=entry; else S.customZones.push(entry);
-      saveJSON(LS_CUSTOM_ZONES, S.customZones);
-      renderCustomZoneChips();
       drawBoard(S.view==='rel'&&S.relDraw);
-    });
+    }
 
-    // Render de chips personalizados
-    function renderCustomZoneChips(){
-      var host = document.getElementById('customZonesHost');
-      host.innerHTML='';
-      if(!S.customZones.length) return;
-      S.customZones.forEach(function(cz, i){
-        var btn = document.createElement('button');
-        btn.className='chipbtn';
-        btn.title='Aplicar zona personalizada';
-        var dot = document.createElement('span'); dot.className='dot'; dot.style.background=cz.fill; dot.style.borderColor=cz.stroke;
-        btn.appendChild(dot);
-        btn.appendChild(document.createTextNode(' '+cz.name));
-        btn.addEventListener('click', function(){
-          if(!selectedNode){ alert('Selecciona una burbuja'); return; }
-          setZone('custom:'+cz.name, {fill:cz.fill, stroke:cz.stroke});
-          selectedNode.customName = cz.name;
-        });
-        host.appendChild(btn);
+    function applyChipColors(){
+      [['chipPriv','privada'],['chipSemi','semi'],['chipServ','servicio'],['chipSoc','social']].forEach(function([id,key]){
+        var chip = document.getElementById(id);
+        var col = ZONE_COLORS[zoneStyle[key]||'Azul']||ZONE_COLORS['Azul'];
+        var circle = chip && chip.querySelector('circle');
+        if(circle){ circle.setAttribute('fill', col.fill); circle.setAttribute('stroke', col.stroke); }
       });
+    }
+
+    function renderZoneBar(){
+      var bar = document.getElementById('zoneBar'); bar.innerHTML='';
+      var makeChip = function(label, getter, onCog, applyZone){
+        var btn = document.createElement('button'); btn.className='chipbtn'; btn.title='Aplicar: '+label;
+        var dot = document.createElement('span'); dot.className='dot';
+        var col = getter(); dot.style.background=col.fill; dot.style.borderColor=col.stroke;
+        btn.appendChild(dot); btn.appendChild(document.createTextNode(' '+label));
+        btn.addEventListener('click', applyZone);
+
+        var cog = document.createElement('button'); cog.className='cfgbtn'; cog.textContent='⚙';
+        cog.title='Opciones';
+        cog.addEventListener('click', onCog);
+
+        var wrap = document.createElement('span'); wrap.style.display='inline-flex'; wrap.style.alignItems='center'; wrap.style.gap='6px';
+        wrap.appendChild(btn); wrap.appendChild(cog);
+        bar.appendChild(wrap);
+      };
+
+      // Base
+      makeChip('Social',
+        function(){ return ZONE_COLORS[zoneStyle.social]||ZONE_COLORS['Azul']; },
+        function(){
+          var pick = pickColorName(zoneStyle.social); if(!pick) return;
+          zoneStyle.social = pick; saveJSON(LS_ZONE_STYLE, zoneStyle); applyChipColors(); renderZoneBar();
+        },
+        function(){ setZone('social'); }
+      );
+      makeChip('Semi-Privado',
+        function(){ return ZONE_COLORS[zoneStyle.semi]||ZONE_COLORS['Gris']; },
+        function(){
+          var pick = pickColorName(zoneStyle.semi); if(!pick) return;
+          zoneStyle.semi = pick; saveJSON(LS_ZONE_STYLE, zoneStyle); applyChipColors(); renderZoneBar();
+        },
+        function(){ setZone('semi'); }
+      );
+      makeChip('Privada',
+        function(){ return ZONE_COLORS[zoneStyle.privada]||ZONE_COLORS['Morado']; },
+        function(){
+          var pick = pickColorName(zoneStyle.privada); if(!pick) return;
+          zoneStyle.privada = pick; saveJSON(LS_ZONE_STYLE, zoneStyle); applyChipColors(); renderZoneBar();
+        },
+        function(){ setZone('privada'); }
+      );
+      makeChip('Servicio',
+        function(){ return ZONE_COLORS[zoneStyle.servicio]||ZONE_COLORS['Naranja']; },
+        function(){
+          var pick = pickColorName(zoneStyle.servicio); if(!pick) return;
+          zoneStyle.servicio = pick; saveJSON(LS_ZONE_STYLE, zoneStyle); applyChipColors(); renderZoneBar();
+        },
+        function(){ setZone('servicio'); }
+      );
+
+      // Personalizadas
+      (S.customZones||[]).forEach(function(cz, idx){
+        makeChip(cz.name,
+          function(){ return {fill:cz.fill, stroke:cz.stroke}; },
+          function(){
+            var op = prompt('Opciones: escribe "color" para cambiar o "eliminar" para borrar esta zona.', 'color');
+            if(op==null) return;
+            op = op.trim().toLowerCase();
+            if(op==='eliminar'){
+              if(!confirm('¿Eliminar zona personalizada "'+cz.name+'"? Esto quitará solo el chip (no cambia los colores ya aplicados).')) return;
+              S.customZones.splice(idx,1); saveJSON(LS_CUSTOM_ZONES,S.customZones); renderZoneBar();
+            }else if(op==='color'){
+              var pick = pickColorName(cz.colorName||'Azul'); if(!pick) return;
+              var st = ZONE_COLORS[pick];
+              cz.colorName=pick; cz.fill=st.fill; cz.stroke=st.stroke;
+              saveJSON(LS_CUSTOM_ZONES,S.customZones); renderZoneBar();
+            }
+          },
+          function(){ setZone('custom:'+cz.name, {fill:cz.fill, stroke:cz.stroke}); }
+        );
+      });
+
+      // Añadir
+      var add = document.createElement('button'); add.textContent='Añadir zona…'; add.className='chipbtn';
+      add.addEventListener('click', function(){
+        if(!selectedNode){ alert('Selecciona una burbuja'); return; }
+        var nombre = prompt('Nombre de la zona personalizada:',''); if(nombre==null || !nombre.trim()) return;
+        var pick = pickColorName('Azul'); if(!pick) return;
+        var st = ZONE_COLORS[pick];
+        var entry = {name:nombre.trim(), colorName:pick, fill:st.fill, stroke:st.stroke};
+        // añade/actualiza
+        var idx = (S.customZones||[]).findIndex(function(z){ return z.name.toLowerCase()===entry.name.toLowerCase(); });
+        if(idx>=0) S.customZones[idx]=entry; else (S.customZones||[]).push(entry);
+        saveJSON(LS_CUSTOM_ZONES,S.customZones);
+        setZone('custom:'+entry.name, {fill:entry.fill, stroke:entry.stroke});
+        renderZoneBar();
+      });
+      bar.appendChild(add);
     }
 
     // ===== Geometría flechas =====
@@ -779,7 +799,7 @@ function showErr(e){
 
     // Inicial
     applyChipColors();
-    renderCustomZoneChips();
+    renderZoneBar();
     drawBoard(false);
 
   }catch(e){ showErr(e); }
